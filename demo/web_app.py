@@ -24,7 +24,7 @@ import os
 import sys
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import kb_data as kb  # noqa: E402
 import agent  # noqa: E402
+import document_loader  # noqa: E402
 
 # ====================================================================== #
 #  应用
@@ -48,6 +49,7 @@ _state: dict = {
     "initialized": False,
     "dimension": 0,
     "doc_count": 0,
+    "upload_count": 0,
 }
 
 
@@ -119,6 +121,94 @@ def get_corpus():
     return {"documents": kb.CORPUS}
 
 
+@app.get("/api/documents")
+def get_documents():
+    """返回所有文档（内置语料 + 上传文档）。"""
+    if agent.DOCUMENTS:
+        return {"documents": [
+            {
+                "id": d["document_id"],
+                "title": d["title"],
+                "category": d["category"],
+                "char_count": d["char_count"],
+                "chunk_count": len(d["chunks"]),
+                "source_file": d.get("source_file", ""),
+            }
+            for d in agent.DOCUMENTS
+        ]}
+    # 未初始化时返回内置语料
+    return {"documents": [
+        {
+            "id": d["id"],
+            "title": d["title"],
+            "category": "RAG/向量数据库",
+            "char_count": len(d["content"]),
+            "chunk_count": 0,
+            "source_file": "",
+        }
+        for d in kb.CORPUS
+    ]}
+
+
+@app.post("/api/upload")
+async def upload_documents(files: list[UploadFile] = File(...)):
+    """上传文档（Markdown/DOCX/PDF/XLSX），解析→切分→嵌入入库→更新本体。"""
+    if not _state["initialized"]:
+        raise HTTPException(status_code=400, detail="知识库未初始化，请先点击「初始化知识库」")
+
+    results = []
+    documents_to_ingest = []
+    parsed_docs = []
+
+    for file in files:
+        content = await file.read()
+        try:
+            parsed = document_loader.parse_file(file.filename, content)
+            doc_id = f"upload_{_state['upload_count'] + 1}"
+            _state["upload_count"] += 1
+            parsed["id"] = doc_id
+            parsed_docs.append(parsed)
+
+            # 按 chunk 准备入库文档
+            for i, chunk in enumerate(parsed["chunks"]):
+                chunk_id = f"{doc_id}_c{i + 1}"
+                embed_text = f"{chunk['heading']}。{chunk['content']}" if chunk["heading"] else chunk["content"]
+                documents_to_ingest.append({
+                    "id": chunk_id,
+                    "text": embed_text,
+                    "fields": {
+                        "title": parsed["title"],
+                        "content": chunk["content"],
+                        "heading": chunk["heading"],
+                        "document_id": doc_id,
+                    },
+                })
+
+            results.append({
+                "document_id": doc_id,
+                "title": parsed["title"],
+                "source_file": file.filename,
+                "source_type": parsed["source_type"],
+                "chunk_count": len(parsed["chunks"]),
+            })
+        except Exception as e:
+            results.append({
+                "source_file": file.filename,
+                "error": str(e),
+            })
+
+    # 批量入库 + 更新本体
+    if documents_to_ingest:
+        try:
+            kb.ingest_documents(documents_to_ingest)
+        except kb.KBError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        agent.add_documents(parsed_docs)
+
+    _state["doc_count"] = len(agent.DOCUMENTS)
+    return {"uploaded": results, "total_chunks": len(documents_to_ingest)}
+
+
 @app.post("/api/init")
 def init_kb():
     """初始化知识库：发现维度 → 注册嵌入 → 创建集合 → 入库。"""
@@ -131,6 +221,7 @@ def init_kb():
         _state["initialized"] = True
         _state["dimension"] = result["dimension"]
         _state["doc_count"] = result["doc_count"]
+        _state["upload_count"] = 0
         return result
     except kb.KBError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -189,6 +280,7 @@ def api_cleanup():
         _state["initialized"] = False
         _state["dimension"] = 0
         _state["doc_count"] = 0
+        _state["upload_count"] = 0
         return {"message": "清理完成"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

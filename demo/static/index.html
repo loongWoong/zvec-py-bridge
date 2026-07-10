@@ -413,6 +413,38 @@ body {
   padding: 30px;
 }
 
+/* ===== Upload ===== */
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 18px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+}
+.upload-area:hover, .upload-area.dragover {
+  border-color: var(--primary);
+  background: #F5F3FF;
+}
+.upload-area p { font-size: 13px; color: var(--muted); }
+.upload-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.upload-result {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+.upload-result.ok { background: #ECFDF5; color: #065F46; }
+.upload-result.err { background: #FEF2F2; color: #991B1B; }
+.doc-source {
+  font-size: 10px;
+  color: var(--primary);
+  background: #E0E7FF;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .container { flex-direction: column; }
@@ -474,6 +506,23 @@ body {
           <span class="status-label">向量维度</span>
           <span class="status-value" id="st-dim">-</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Document Upload -->
+    <div class="card">
+      <div class="card-header">📎 文档上传</div>
+      <div class="card-body">
+        <div class="upload-area" id="upload-area"
+             onclick="document.getElementById('file-input').click()">
+          <p>📁 点击或拖拽文件到此处</p>
+          <p class="upload-hint">支持 .md .docx .pdf .xlsx</p>
+          <input type="file" id="file-input" multiple
+                 accept=".md,.docx,.pdf,.xlsx,.txt"
+                 style="display:none"
+                 onchange="handleUpload(this.files)">
+        </div>
+        <div id="upload-status"></div>
       </div>
     </div>
 
@@ -621,16 +670,19 @@ function renderStatus(s) {
 // ====================================================================
 //  Render: corpus
 // ====================================================================
-function renderCorpus(docs) {
+function renderDocuments(docs) {
   document.getElementById('corpus-count').textContent = docs.length;
   const list = document.getElementById('doc-list');
-  list.innerHTML = docs.map(d => `
+  list.innerHTML = docs.map(d => {
+    const source = d.source_file ? `<span class="doc-source">${d.category}</span>` : '';
+    const chunks = d.chunk_count ? ` · ${d.chunk_count} 块` : '';
+    return `
     <div class="doc-item">
-      <div class="doc-id">${d.id}</div>
-      <div class="doc-title">${d.title}</div>
-      <div class="doc-content">${d.content}</div>
+      <div class="doc-id">${d.id}${source}</div>
+      <div class="doc-title">${d.title}${d.source_file ? ` <span style="font-size:10px;color:var(--muted)">(${d.source_file})</span>` : ''}</div>
+      <div class="doc-content">${d.content ? d.content.slice(0,100) : ''}...${chunks}</div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 // ====================================================================
@@ -704,12 +756,61 @@ async function loadConfig() {
   } catch (e) { /* ignore */ }
 }
 
-async function loadCorpus() {
+async function loadDocuments() {
   try {
-    const data = await api('GET', '/api/corpus');
-    renderCorpus(data.documents);
+    const data = await api('GET', '/api/documents');
+    renderDocuments(data.documents);
   } catch (e) { /* ignore */ }
 }
+
+// ====================================================================
+//  Document upload
+// ====================================================================
+async function handleUpload(fileList) {
+  if (!kbReady) { toast('请先初始化知识库'); return; }
+  const files = Array.from(fileList);
+  if (!files.length) return;
+
+  const formData = new FormData();
+  files.forEach(f => formData.append('files', f));
+
+  const status = document.getElementById('upload-status');
+  status.innerHTML = '<div class="loading"><div class="spinner"></div> 正在解析并入库...</div>';
+
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+
+    status.innerHTML = (data.uploaded || []).map(u =>
+      u.error
+        ? `<div class="upload-result err">❌ ${u.source_file}: ${u.error}</div>`
+        : `<div class="upload-result ok">✅ ${u.source_file} → ${u.document_id} (${u.chunk_count} 块, ${u.source_type})</div>`
+    ).join('');
+
+    toast(`上传完成：${data.total_chunks} 个分块入库`, 'success');
+    await loadDocuments();
+    await refreshStatus();
+  } catch (e) {
+    status.innerHTML = `<div class="upload-result err">❌ ${e.message}</div>`;
+    toast('上传失败: ' + e.message);
+  }
+  // 清空 file input 以允许重复上传同一文件
+  document.getElementById('file-input').value = '';
+}
+
+// 拖拽上传
+(function setupDragDrop() {
+  const area = document.getElementById('upload-area');
+  if (!area) return;
+  area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('dragover'); });
+  area.addEventListener('dragleave', () => area.classList.remove('dragover'));
+  area.addEventListener('drop', (e) => {
+    e.preventDefault();
+    area.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleUpload(e.dataTransfer.files);
+  });
+})();
 
 function useSample(q) {
   document.getElementById('qa-input').value = q;
@@ -725,6 +826,7 @@ async function initKB() {
     const result = await api('POST', '/api/init');
     toast(`知识库初始化成功！维度=${result.dimension}，文档=${result.doc_count}`, 'success');
     await refreshStatus();
+    await loadDocuments();
   } catch (e) {
     toast('初始化失败: ' + e.message);
   } finally {
@@ -742,7 +844,9 @@ async function cleanupKB() {
     document.getElementById('results-card').style.display = 'none';
     document.getElementById('answer-card').style.display = 'none';
     document.getElementById('trace-card').style.display = 'none';
+    document.getElementById('upload-status').innerHTML = '';
     await refreshStatus();
+    await loadDocuments();
   } catch (e) {
     toast('清理失败: ' + e.message);
   } finally {
@@ -885,7 +989,7 @@ async function handleAgentAsk() {
 }
 // ====================================================================
 (async function() {
-  await Promise.all([loadConfig(), loadCorpus(), refreshStatus()]);
+  await Promise.all([loadConfig(), loadDocuments(), refreshStatus()]);
   // poll status every 15s
   setInterval(refreshStatus, 15000);
 })();

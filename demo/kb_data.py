@@ -211,6 +211,8 @@ def create_collection(dimension: int) -> None:
             "fields": [
                 {"name": "title", "data_type": "STRING", "nullable": True},
                 {"name": "content", "data_type": "STRING", "nullable": True},
+                {"name": "heading", "data_type": "STRING", "nullable": True},
+                {"name": "document_id", "data_type": "STRING", "nullable": True},
             ],
             "vectors": [
                 {
@@ -226,16 +228,12 @@ def create_collection(dimension: int) -> None:
         raise KBError(f"创建集合失败: ({r.status_code}) {r.text[:200]}", r.status_code)
 
 
-def ingest_corpus() -> int:
-    """批量插入知识库语料（文本自动嵌入为向量）。"""
-    documents = [
-        {
-            "id": doc["id"],
-            "text": f"{doc['title']}。{doc['content']}",
-            "fields": {"title": doc["title"], "content": doc["content"]},
-        }
-        for doc in CORPUS
-    ]
+def ingest_documents(documents: list[dict]) -> int:
+    """批量插入文档（文本自动嵌入为向量）。
+
+    documents: [{id, text, fields:{title, content, heading, document_id}}, ...]
+    返回插入数量。
+    """
     r = zvec_api("POST", f"/collections/{COLLECTION_NAME}/documents", json={
         "embedding": {"function": EMBED_FUNC_NAME, "field": VECTOR_FIELD},
         "documents": documents,
@@ -244,21 +242,39 @@ def ingest_corpus() -> int:
         raise KBError(f"插入文档失败: ({r.status_code}) {r.text[:200]}", r.status_code)
     body = r.json()
     count = body.get("count", 0)
-    if count != len(CORPUS):
-        raise KBError(f"插入数量不匹配: 期望 {len(CORPUS)}, 实际 {count}")
+    if count != len(documents):
+        raise KBError(f"插入数量不匹配: 期望 {len(documents)}, 实际 {count}")
     return count
+
+
+def ingest_corpus() -> int:
+    """批量插入知识库语料（文本自动嵌入为向量）。"""
+    documents = [
+        {
+            "id": doc["id"],
+            "text": f"{doc['title']}。{doc['content']}",
+            "fields": {
+                "title": doc["title"],
+                "content": doc["content"],
+                "heading": doc["title"],
+                "document_id": doc["id"],
+            },
+        }
+        for doc in CORPUS
+    ]
+    return ingest_documents(documents)
 
 
 def search(query: str, topk: int = 3) -> list[dict]:
     """语义检索：将查询文本嵌入为向量，返回 Top-K 相关文档。
 
-    返回 [{id, score, title, content}, ...]
+    返回 [{id, score, title, content, heading, document_id}, ...]
     """
     r = zvec_api("POST", f"/collections/{COLLECTION_NAME}/search", json={
         "embedding": {"function": EMBED_FUNC_NAME, "field": VECTOR_FIELD},
         "queries": [{"field_name": VECTOR_FIELD, "text": query}],
         "topk": topk,
-        "output_fields": ["title", "content"],
+        "output_fields": ["title", "content", "heading", "document_id"],
     })
     if r.status_code != 200:
         raise KBError(f"检索失败: ({r.status_code}) {r.text[:200]}", r.status_code)
@@ -269,6 +285,8 @@ def search(query: str, topk: int = 3) -> list[dict]:
             "score": d.get("score", 0),
             "title": d.get("fields", {}).get("title", ""),
             "content": d.get("fields", {}).get("content", ""),
+            "heading": d.get("fields", {}).get("heading", ""),
+            "document_id": d.get("fields", {}).get("document_id", ""),
         }
         for d in docs
     ]

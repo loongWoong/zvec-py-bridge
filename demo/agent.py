@@ -63,6 +63,37 @@ def build_ontology() -> None:
             "category": "RAG/向量数据库",
             "char_count": len(content),
             "chunks": doc_chunks,
+            "source_file": "",
+        })
+
+
+def add_documents(parsed_docs: list[dict]) -> None:
+    """将上传的文档追加到本体（DOCUMENTS / CHUNKS）。
+
+    parsed_docs: [{id, title, content, chunks:[{heading, content}], source_type, source_file}]
+    """
+    for doc in parsed_docs:
+        doc_id = doc["id"]
+        doc_chunks = []
+        for i, chunk in enumerate(doc["chunks"]):
+            chunk_id = f"{doc_id}_c{i + 1}"
+            chunk_obj = {
+                "chunk_id": chunk_id,
+                "document_id": doc_id,
+                "heading": chunk["heading"],
+                "content": chunk["content"],
+                "ordinal": i + 1,
+            }
+            doc_chunks.append(chunk_obj)
+            CHUNKS[chunk_id] = chunk_obj
+        DOCUMENTS.append({
+            "document_id": doc_id,
+            "title": doc["title"],
+            "content": doc["content"],
+            "category": doc.get("source_type", "uploaded"),
+            "char_count": len(doc["content"]),
+            "chunks": doc_chunks,
+            "source_file": doc.get("source_file", ""),
         })
 
 
@@ -73,15 +104,17 @@ def build_ontology() -> None:
 def tool_search_documents(query: str, limit: int = 5) -> dict:
     """定位层：语义检索文档，返回轻量证据片段。
 
-    调用 zvec 向量库进行语义检索，返回包含相关度评分的证据片段。
+    调用 zvec 向量库进行语义检索，返回 chunk 级证据片段（含相关度评分）。
     """
     docs = kb.search(query, topk=limit)
     return {
         "count": len(docs),
         "results": [
             {
-                "document_id": d["id"],
+                "document_id": d.get("document_id") or d["id"],
+                "chunk_id": d["id"],
                 "title": d["title"],
+                "heading": d.get("heading", ""),
                 "score": round(d["score"], 4),
                 "excerpt": d["content"][:120] + "..." if len(d["content"]) > 120 else d["content"],
             }
@@ -103,6 +136,7 @@ def tool_read_document(document_id: str) -> dict:
                 "content": doc["content"],
                 "category": doc["category"],
                 "char_count": doc["char_count"],
+                "source_file": doc.get("source_file", ""),
                 "chunks": [
                     {
                         "chunk_id": c["chunk_id"],
@@ -127,6 +161,7 @@ def tool_list_documents() -> dict:
                 "category": d["category"],
                 "char_count": d["char_count"],
                 "chunk_count": len(d["chunks"]),
+                "source_file": d.get("source_file", ""),
             }
             for d in DOCUMENTS
         ],
@@ -261,11 +296,12 @@ SYSTEM_PROMPT = """\
 
 ## 可用工具
 
-1. **search_documents** — 语义检索，返回轻量证据片段（document_id, title, score, excerpt）
+1. **search_documents** — 语义检索，返回 chunk 级证据片段（document_id, chunk_id, title, heading, score, excerpt）
    - 何时使用：用户问"哪些文档提到 X""X 出现在哪里"等定位性问题
+   - 注意：结果中的 document_id 可用于 read_document 获取完整文档
    - 不要：若用户需要归纳/比较/趋势分析，不要仅凭此工具结果作答，应继续调用 read_document 或 prepare_answer_context
 
-2. **read_document** — 读取单篇文档全文及分块
+2. **read_document** — 读取单篇文档全文及分块（参数为 document_id）
    - 何时使用：搜索片段不够完整、需要核对出处或补充上下文时
    - 不要：不要盲目遍历大量全文
 
@@ -287,6 +323,7 @@ SYSTEM_PROMPT = """\
 
 ## 知识库
 知识库包含 8 篇关于 RAG、向量数据库、嵌入模型、HNSW 索引、余弦相似度、文档分块、混合检索、重排序的中文文档。
+用户也可能上传了额外的文档（Markdown、DOCX、PDF、XLSX），可通过 list_documents 查看全部文档。
 """
 
 

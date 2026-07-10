@@ -5,3 +5,9 @@ requests>=2.28
 # --- Web 界面（web_app.py）---
 fastapi>=0.115
 uvicorn[standard]>=0.34
+python-multipart>=0.0.9          # FastAPI 文件上传支持
+
+# --- 文档解析（document_loader.py）---
+python-docx>=1.1                 # DOCX 解析
+pypdf>=4.0                       # PDF 解析
+openpyxl>=3.1                    # XLSX 解析
