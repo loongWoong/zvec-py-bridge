@@ -214,6 +214,90 @@ body {
 }
 .topk-select:focus { border-color: var(--primary); }
 
+/* ===== Mode toggle ===== */
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 3px;
+}
+.mode-btn {
+  padding: 5px 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.mode-btn.active {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+/* ===== Trace ===== */
+.trace-step {
+  border-left: 3px solid var(--primary);
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: #F8FAFC;
+  border-radius: 0 8px 8px 0;
+}
+.trace-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trace-iter {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.trace-tool {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 13px;
+}
+.trace-dur {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.trace-args {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-family: monospace;
+}
+.trace-result {
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--text);
+  background: #fff;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.trace-summary {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
 /* ===== Results ===== */
 .result-section-title {
   font-size: 13px;
@@ -406,7 +490,13 @@ body {
   <div class="main">
     <!-- Q&A Input -->
     <div class="card">
-      <div class="card-header">💬 智能问答</div>
+      <div class="card-header">
+        💬 智能问答
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="mode-rag" onclick="switchMode('rag')">RAG 模式</button>
+          <button class="mode-btn" id="mode-agent" onclick="switchMode('agent')">Agent 模式</button>
+        </div>
+      </div>
       <div class="card-body">
         <div class="qa-input-wrap">
           <input type="text" class="qa-input" id="qa-input"
@@ -428,6 +518,12 @@ body {
       </div>
     </div>
 
+    <!-- Agent Trace -->
+    <div class="card" id="trace-card" style="display:none">
+      <div class="card-header">🔄 Agent 执行轨迹</div>
+      <div class="card-body" id="trace-body"></div>
+    </div>
+
     <!-- Results -->
     <div class="card" id="results-card" style="display:none">
       <div class="card-header">📄 检索结果</div>
@@ -436,7 +532,7 @@ body {
 
     <!-- Answer -->
     <div class="card" id="answer-card" style="display:none">
-      <div class="card-header">🤖 AI 回答</div>
+      <div class="card-header" id="answer-header">🤖 AI 回答</div>
       <div class="card-body">
         <div class="answer-box" id="answer-box"></div>
       </div>
@@ -450,6 +546,7 @@ body {
 // ====================================================================
 let kbReady = false;
 let busy = false;
+let currentMode = 'rag';  // 'rag' | 'agent'
 
 // ====================================================================
 //  API helpers
@@ -481,7 +578,9 @@ function setBusy(b) {
   const ids = ['btn-init', 'btn-search', 'btn-ask', 'btn-cleanup'];
   ids.forEach(id => {
     const el = document.getElementById(id);
-    if (el && !el.classList.contains('btn-danger')) el.disabled = b || !kbReady;
+    if (!el) return;
+    if (el.classList.contains('btn-danger')) return;  // cleanup has its own logic
+    el.disabled = b || !kbReady;
   });
   document.getElementById('btn-init').disabled = b;
 }
@@ -642,6 +741,7 @@ async function cleanupKB() {
     toast('清理完成', 'success');
     document.getElementById('results-card').style.display = 'none';
     document.getElementById('answer-card').style.display = 'none';
+    document.getElementById('trace-card').style.display = 'none';
     await refreshStatus();
   } catch (e) {
     toast('清理失败: ' + e.message);
@@ -695,7 +795,94 @@ async function handleAsk() {
 }
 
 // ====================================================================
-//  Init
+//  Mode switching (RAG ↔ Agent)
+// ====================================================================
+function switchMode(mode) {
+  currentMode = mode;
+  const rag = mode === 'rag';
+  // toggle active button
+  document.getElementById('mode-rag').classList.toggle('active', rag);
+  document.getElementById('mode-agent').classList.toggle('active', !rag);
+  // toggle UI elements
+  document.getElementById('topk-select').style.display = rag ? '' : 'none';
+  document.getElementById('btn-search').style.display = rag ? '' : 'none';
+  const askBtn = document.getElementById('btn-ask');
+  askBtn.innerHTML = rag ? '🤖 RAG 问答' : '🤖 Agent 问答';
+  askBtn.onclick = rag ? handleAsk : handleAgentAsk;
+  // update Enter key handler
+  document.getElementById('qa-input').onkeydown = rag
+    ? (e) => { if (e.key === 'Enter') handleAsk(); }
+    : (e) => { if (e.key === 'Enter') handleAgentAsk(); };
+  // hide agent-only cards when switching to RAG
+  if (rag) {
+    document.getElementById('trace-card').style.display = 'none';
+  }
+  // update answer card header
+  document.getElementById('answer-header').textContent = rag ? '🤖 AI 回答' : '🤖 Agent 回答';
+}
+
+// ====================================================================
+//  Render: agent trace
+// ====================================================================
+function renderTrace(trace, iterations, elapsed) {
+  const card = document.getElementById('trace-card');
+  const body = document.getElementById('trace-body');
+  card.style.display = 'block';
+  if (!trace.length) {
+    body.innerHTML = '<div class="empty-hint">Agent 未调用任何工具，直接生成回答</div>';
+    return;
+  }
+  body.innerHTML = `
+    <div class="trace-summary">
+      ${iterations} 轮迭代 · ${trace.length} 次工具调用 · 耗时 ${elapsed}s
+    </div>
+    ${trace.map(t => {
+      const argsStr = Object.entries(t.args || {})
+        .map(([k,v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ');
+      const resultStr = JSON.stringify(t.result, null, 2);
+      const resultPreview = resultStr.length > 500 ? resultStr.slice(0, 500) + '\n...' : resultStr;
+      return `
+        <div class="trace-step">
+          <div class="trace-head">
+            <span class="trace-iter">#${t.iteration}</span>
+            <span class="trace-tool">${t.tool}</span>
+            <span class="trace-dur">${t.duration}s</span>
+          </div>
+          ${argsStr ? `<div class="trace-args">${argsStr}</div>` : ''}
+          <div class="trace-result">${resultPreview}</div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+// ====================================================================
+//  Agent ask
+// ====================================================================
+async function handleAgentAsk() {
+  const q = document.getElementById('qa-input').value.trim();
+  if (!q) { toast('请输入问题'); return; }
+  if (busy) return;
+  setBusy(true);
+  const tBody = document.getElementById('trace-body');
+  const aBox = document.getElementById('answer-box');
+  // show trace card with loading
+  document.getElementById('trace-card').style.display = 'block';
+  document.getElementById('results-card').style.display = 'none';
+  document.getElementById('answer-card').style.display = 'block';
+  tBody.innerHTML = '<div class="loading"><div class="spinner"></div> Agent 正在思考并调用工具...</div>';
+  aBox.innerHTML = '<div class="loading"><div class="spinner"></div> 等待 Agent 生成回答...</div>';
+  try {
+    const data = await api('POST', '/api/agent/ask', { query: q });
+    renderTrace(data.trace || [], data.iterations, data.elapsed);
+    renderAnswer(data.answer);
+  } catch (e) {
+    tBody.innerHTML = `<div class="empty-hint" style="color:var(--error)">❌ ${e.message}</div>`;
+    aBox.innerHTML = `<span style="color:var(--error)">❌ ${e.message}</span>`;
+  } finally {
+    setBusy(false);
+  }
+}
 // ====================================================================
 (async function() {
   await Promise.all([loadConfig(), loadCorpus(), refreshStatus()]);

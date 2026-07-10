@@ -33,6 +33,7 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import kb_data as kb  # noqa: E402
+import agent  # noqa: E402
 
 # ====================================================================== #
 #  应用
@@ -61,6 +62,11 @@ class SearchRequest(BaseModel):
 class AskRequest(BaseModel):
     query: str
     topk: int = 3
+
+
+class AgentAskRequest(BaseModel):
+    query: str
+    max_iterations: int = 6
 
 
 # ====================================================================== #
@@ -121,6 +127,7 @@ def init_kb():
                 "message": "知识库已初始化"}
     try:
         result = kb.init_knowledge_base()
+        agent.build_ontology()
         _state["initialized"] = True
         _state["dimension"] = result["dimension"]
         _state["doc_count"] = result["doc_count"]
@@ -154,6 +161,20 @@ def api_ask(req: AskRequest):
         result = kb.rag_ask(req.query, topk=req.topk)
         return {"query": req.query, "topk": req.topk,
                 "documents": result["documents"], "answer": result["answer"]}
+    except kb.KBError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agent/ask")
+def api_agent_ask(req: AgentAskRequest):
+    """OAG Agent 问答：LLM 自主选择工具 → runtime 执行 → 整合结果。"""
+    if not _state["initialized"]:
+        raise HTTPException(status_code=400, detail="知识库未初始化，请先点击「初始化知识库」")
+    try:
+        result = agent.run_agent(req.query, max_iterations=req.max_iterations)
+        return {"query": req.query, **result}
     except kb.KBError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
