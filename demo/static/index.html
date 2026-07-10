@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG 知识库演示 · zvec + Ollama</title>
+<style>
+:root {
+  --primary: #4F46E5;
+  --primary-light: #6366F1;
+  --primary-dark: #4338CA;
+  --bg: #F1F5F9;
+  --card: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #1E293B;
+  --muted: #64748B;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,.10);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+/* ===== Header ===== */
+.header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-lg);
+}
+.header h1 { font-size: 18px; font-weight: 700; }
+.header .subtitle { font-size: 12px; opacity: .8; margin-top: 2px; }
+.header .badge {
+  background: rgba(255,255,255,.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== Layout ===== */
+.container {
+  display: flex;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+.sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== Card ===== */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-body { padding: 16px 18px; }
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+  text-decoration: none;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+.btn-success {
+  background: var(--success);
+  color: #fff;
+}
+.btn-success:hover:not(:disabled) { background: #059669; }
+.btn-danger {
+  background: #FEF2F2;
+  color: var(--error);
+  border: 1px solid #FECACA;
+}
+.btn-danger:hover:not(:disabled) { background: #FEE2E2; }
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover:not(:disabled) { background: #F8FAFC; border-color: var(--primary); }
+.btn-sm { padding: 6px 14px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* ===== Status ===== */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.status-label { color: var(--muted); }
+.status-value { font-weight: 600; }
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.dot-ok { background: var(--success); }
+.dot-err { background: var(--error); }
+.dot-wait { background: var(--warning); }
+
+/* ===== Document list ===== */
+.doc-list { max-height: 280px; overflow-y: auto; }
+.doc-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.doc-item:last-child { border-bottom: none; }
+.doc-id { font-weight: 700; color: var(--primary); font-size: 12px; }
+.doc-title { font-weight: 600; margin-top: 2px; }
+.doc-content { color: var(--muted); margin-top: 4px; font-size: 12px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ===== Q&A ===== */
+.qa-input-wrap {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.qa-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s;
+  font-family: inherit;
+}
+.qa-input:focus { border-color: var(--primary); }
+.sample-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chip {
+  background: #F1F5F9;
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.chip:hover { background: #E0E7FF; border-color: var(--primary-light); color: var(--primary); }
+
+.topk-select {
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+}
+.topk-select:focus { border-color: var(--primary); }
+
+/* ===== Results ===== */
+.result-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.result-card {
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: box-shadow .15s;
+}
+.result-card:hover { box-shadow: var(--shadow); }
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.result-id {
+  font-weight: 700;
+  color: var(--primary);
+  font-size: 12px;
+  background: #E0E7FF;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.result-title { font-weight: 600; font-size: 14px; margin-left: 8px; }
+.score-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+.score-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.score-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+.score-value { font-size: 12px; font-weight: 700; color: var(--muted); min-width: 40px; text-align: right; }
+.result-content {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+  margin-top: 6px;
+}
+
+/* ===== Answer ===== */
+.answer-box {
+  background: linear-gradient(135deg, #EEF2FF, #F0F9FF);
+  border: 1px solid #C7D2FE;
+  border-radius: 8px;
+  padding: 16px 18px;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ===== Loading / Toast ===== */
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 20px;
+  justify-content: center;
+}
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  box-shadow: var(--shadow-lg);
+  animation: slideIn .25s ease;
+}
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
+.toast-error { background: var(--error); }
+.toast-success { background: var(--success); }
+
+.empty-hint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 30px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .container { flex-direction: column; }
+  .sidebar { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📚 RAG 知识库演示</h1>
+    <div class="subtitle">zvec REST Bridge + Ollama qwen3-embedding:4b</div>
+  </div>
+  <div class="badge" id="header-badge">未初始化</div>
+</div>
+
+<div class="container">
+  <!-- ===== Sidebar ===== -->
+  <div class="sidebar">
+    <!-- KB Management -->
+    <div class="card">
+      <div class="card-header">🔧 知识库管理</div>
+      <div class="card-body">
+        <button class="btn btn-primary btn-block" id="btn-init" onclick="initKB()">
+          ⚙ 初始化知识库
+        </button>
+        <button class="btn btn-danger btn-block" id="btn-cleanup" onclick="cleanupKB()" style="margin-top:10px" disabled>
+          🗑 清理知识库
+        </button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="card">
+      <div class="card-header">📊 服务状态</div>
+      <div class="card-body" id="status-body">
+        <div class="status-row">
+          <span class="status-label"><span class="dot dot-wait"></span>zvec 服务</span>
+          <span class="status-value" id="st-zvec">检测中...</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label"><span class="dot dot-wait"></span>Ollama 服务</span>
+          <span class="status-value" id="st-ollama">检测中...</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">嵌入模型</span>
+          <span class="status-value" id="st-embed-model">-</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">知识库状态</span>
+          <span class="status-value" id="st-kb">未初始化</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">文档数量</span>
+          <span class="status-value" id="st-doc-count">0</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">向量维度</span>
+          <span class="status-value" id="st-dim">-</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corpus -->
+    <div class="card">
+      <div class="card-header">📖 知识库文档 (<span id="corpus-count">0</span>)</div>
+      <div class="card-body doc-list" id="doc-list">
+        <div class="empty-hint">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <!-- Q&A Input -->
+    <div class="card">
+      <div class="card-header">💬 智能问答</div>
+      <div class="card-body">
+        <div class="qa-input-wrap">
+          <input type="text" class="qa-input" id="qa-input"
+                 placeholder="输入你的问题，例如：什么是向量数据库？"
+                 onkeydown="if(event.key==='Enter')handleAsk()">
+          <select class="topk-select" id="topk-select">
+            <option value="3">Top 3</option>
+            <option value="5">Top 5</option>
+            <option value="8">Top 8</option>
+          </select>
+          <button class="btn btn-outline" id="btn-search" onclick="handleSearch()" disabled>
+            🔍 检索
+          </button>
+          <button class="btn btn-primary" id="btn-ask" onclick="handleAsk()" disabled>
+            🤖 RAG 问答
+          </button>
+        </div>
+        <div class="sample-chips" id="sample-chips"></div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card" id="results-card" style="display:none">
+      <div class="card-header">📄 检索结果</div>
+      <div class="card-body" id="results-body"></div>
+    </div>
+
+    <!-- Answer -->
+    <div class="card" id="answer-card" style="display:none">
+      <div class="card-header">🤖 AI 回答</div>
+      <div class="card-body">
+        <div class="answer-box" id="answer-box"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====================================================================
+//  State
+// ====================================================================
+let kbReady = false;
+let busy = false;
+
+// ====================================================================
+//  API helpers
+// ====================================================================
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(data.detail || `HTTP ${r.status}`);
+  }
+  return data;
+}
+
+function toast(msg, type = 'error') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function setBusy(b) {
+  busy = b;
+  const ids = ['btn-init', 'btn-search', 'btn-ask', 'btn-cleanup'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('btn-danger')) el.disabled = b || !kbReady;
+  });
+  document.getElementById('btn-init').disabled = b;
+}
+
+// ====================================================================
+//  Score color
+// ====================================================================
+function scoreColor(score) {
+  if (score >= 0.8) return '#10B981';
+  if (score >= 0.6) return '#F59E0B';
+  return '#94A3B8';
+}
+
+// ====================================================================
+//  Render: status
+// ====================================================================
+function renderStatus(s) {
+  const dot = (ok) => `<span class="dot dot-${ok ? 'ok' : 'err'}"></span>`;
+  document.getElementById('st-zvec').innerHTML = dot(s.zvec) + (s.zvec ? '在线' : '离线');
+  document.getElementById('st-ollama').innerHTML = dot(s.ollama) + (s.ollama ? '在线' : '离线');
+  document.getElementById('st-embed-model').textContent = s.has_embed_model ? '已安装' : '未安装';
+  document.getElementById('st-kb').innerHTML = s.kb_initialized
+    ? '<span class="dot dot-ok"></span>已就绪'
+    : '<span class="dot dot-wait"></span>未初始化';
+  document.getElementById('st-doc-count').textContent = s.doc_count || 0;
+  document.getElementById('st-dim').textContent = s.dimension || '-';
+
+  const badge = document.getElementById('header-badge');
+  if (s.kb_initialized) {
+    badge.textContent = '✅ 已就绪';
+    badge.style.background = 'rgba(16,185,129,.3)';
+  } else {
+    badge.textContent = '未初始化';
+    badge.style.background = 'rgba(255,255,255,.2)';
+  }
+}
+
+// ====================================================================
+//  Render: corpus
+// ====================================================================
+function renderCorpus(docs) {
+  document.getElementById('corpus-count').textContent = docs.length;
+  const list = document.getElementById('doc-list');
+  list.innerHTML = docs.map(d => `
+    <div class="doc-item">
+      <div class="doc-id">${d.id}</div>
+      <div class="doc-title">${d.title}</div>
+      <div class="doc-content">${d.content}</div>
+    </div>
+  `).join('');
+}
+
+// ====================================================================
+//  Render: results
+// ====================================================================
+function renderResults(docs) {
+  const card = document.getElementById('results-card');
+  const body = document.getElementById('results-body');
+  if (!docs.length) {
+    card.style.display = 'block';
+    body.innerHTML = '<div class="empty-hint">未检索到相关文档</div>';
+    return;
+  }
+  card.style.display = 'block';
+  body.innerHTML = `
+    <div class="result-section-title">共 ${docs.length} 条结果，按相关度排序</div>
+    ${docs.map(d => {
+      const pct = Math.max(2, Math.min(100, d.score * 100));
+      const color = scoreColor(d.score);
+      return `
+        <div class="result-card">
+          <div class="result-head">
+            <div>
+              <span class="result-id">${d.id}</span>
+              <span class="result-title">${d.title}</span>
+            </div>
+            <div class="score-bar-wrap">
+              <div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${color}"></div></div>
+              <span class="score-value">${d.score.toFixed(4)}</span>
+            </div>
+          </div>
+          <div class="result-content">${d.content}</div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+// ====================================================================
+//  Render: answer
+// ====================================================================
+function renderAnswer(answer) {
+  document.getElementById('answer-card').style.display = 'block';
+  document.getElementById('answer-box').textContent = answer;
+}
+
+// ====================================================================
+//  Actions
+// ====================================================================
+async function refreshStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    renderStatus(s);
+    kbReady = s.kb_initialized;
+    document.getElementById('btn-cleanup').disabled = !kbReady;
+    document.getElementById('btn-search').disabled = !kbReady;
+    document.getElementById('btn-ask').disabled = !kbReady;
+  } catch (e) {
+    toast('获取状态失败: ' + e.message);
+  }
+}
+
+async function loadConfig() {
+  try {
+    const cfg = await api('GET', '/api/config');
+    // sample questions
+    const chips = document.getElementById('sample-chips');
+    chips.innerHTML = (cfg.sample_questions || []).map(q =>
+      `<span class="chip" onclick="useSample('${q.replace(/'/g, "\\'")}')">${q}</span>`
+    ).join('');
+  } catch (e) { /* ignore */ }
+}
+
+async function loadCorpus() {
+  try {
+    const data = await api('GET', '/api/corpus');
+    renderCorpus(data.documents);
+  } catch (e) { /* ignore */ }
+}
+
+function useSample(q) {
+  document.getElementById('qa-input').value = q;
+}
+
+async function initKB() {
+  if (busy) return;
+  setBusy(true);
+  const btn = document.getElementById('btn-init');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px"></span> 初始化中...';
+  try {
+    const result = await api('POST', '/api/init');
+    toast(`知识库初始化成功！维度=${result.dimension}，文档=${result.doc_count}`, 'success');
+    await refreshStatus();
+  } catch (e) {
+    toast('初始化失败: ' + e.message);
+  } finally {
+    btn.innerHTML = orig;
+    setBusy(false);
+  }
+}
+
+async function cleanupKB() {
+  if (busy) return;
+  setBusy(true);
+  try {
+    await api('POST', '/api/cleanup');
+    toast('清理完成', 'success');
+    document.getElementById('results-card').style.display = 'none';
+    document.getElementById('answer-card').style.display = 'none';
+    await refreshStatus();
+  } catch (e) {
+    toast('清理失败: ' + e.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function handleSearch() {
+  const q = document.getElementById('qa-input').value.trim();
+  if (!q) { toast('请输入问题'); return; }
+  if (busy) return;
+  setBusy(true);
+  document.getElementById('answer-card').style.display = 'none';
+  const body = document.getElementById('results-body');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div> 正在检索...</div>';
+  document.getElementById('results-card').style.display = 'block';
+  try {
+    const topk = parseInt(document.getElementById('topk-select').value);
+    const data = await api('POST', '/api/search', { query: q, topk });
+    renderResults(data.documents);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-hint" style="color:var(--error)">❌ ${e.message}</div>`;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function handleAsk() {
+  const q = document.getElementById('qa-input').value.trim();
+  if (!q) { toast('请输入问题'); return; }
+  if (busy) return;
+  setBusy(true);
+  const rBody = document.getElementById('results-body');
+  const aBox = document.getElementById('answer-box');
+  rBody.innerHTML = '<div class="loading"><div class="spinner"></div> 正在检索...</div>';
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('answer-card').style.display = 'block';
+  aBox.innerHTML = '<div class="loading"><div class="spinner"></div> 正在生成回答...</div>';
+  try {
+    const topk = parseInt(document.getElementById('topk-select').value);
+    const data = await api('POST', '/api/ask', { query: q, topk });
+    renderResults(data.documents);
+    renderAnswer(data.answer);
+  } catch (e) {
+    rBody.innerHTML = `<div class="empty-hint" style="color:var(--error)">❌ ${e.message}</div>`;
+    aBox.innerHTML = `<span style="color:var(--error)">❌ ${e.message}</span>`;
+  } finally {
+    setBusy(false);
+  }
+}
+
+// ====================================================================
+//  Init
+// ====================================================================
+(async function() {
+  await Promise.all([loadConfig(), loadCorpus(), refreshStatus()]);
+  // poll status every 15s
+  setInterval(refreshStatus, 15000);
+})();
+</script>
+</body>
+</html>
