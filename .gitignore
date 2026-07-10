@@ -1,3 +1,4 @@
 _ft
 _st
 *.pyc
+/test_data*

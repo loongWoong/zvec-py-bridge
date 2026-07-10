@@ -3,3 +3,7 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 zvec==0.5.1
 numpy
+# Optional embedding-function backends (install only what you use):
+#   pip install dashtext        # BM25 sparse embeddings
+#   pip install sentence-transformers torch  # DefaultLocal dense/sparse + cross-encoder reranker
+#   pip install openai          # OpenAI dense embeddings

@@ -19,7 +19,8 @@ server/
 │
 ├── core/
 │   ├── errors.py           # typed exceptions + uniform JSON error responses
-│   └── manager.py          # thread-safe collection registry + lifecycle
+│   ├── manager.py          # thread-safe collection registry + lifecycle
+│   └── embedding_manager.py# thread-safe embedding-function registry
 │
 ├── model/
 │   ├── dto.py              # pydantic request/response models (the wire format)
@@ -28,6 +29,7 @@ server/
 ├── service/                # orchestration: manager + mapper per domain
 │   ├── collection_service.py
 │   ├── document_service.py
+│   ├── embedding_service.py
 │   ├── query_service.py
 │   ├── index_service.py
 │   └── admin_service.py
@@ -35,12 +37,14 @@ server/
 ├── api/                    # thin FastAPI routers (one per domain)
 │   ├── collection.py
 │   ├── document.py
+│   ├── embedding.py
 │   ├── query.py
 │   ├── index.py
 │   └── admin.py
 │
 ├── test_e2e.py             # core flow tests (39 assertions)
-└── test_e2e_advanced.py    # index/reranker/multi-vector/column tests (19 assertions)
+├── test_e2e_advanced.py    # index/reranker/multi-vector/column tests (19 assertions)
+└── test_e2e_embedding.py   # embedding/text-insert/jieba/diskann tests (32 assertions)
 ```
 
 **Layering rule:** the `api/` layer never imports `zvec`; it only talks to
@@ -76,6 +80,11 @@ Configuration is entirely environment-variable driven:
 | `ZVEC_LOG_TYPE` | `CONSOLE` | CONSOLE or FILE |
 | `ZVEC_QUERY_THREADS` | auto | query thread pool size |
 | `ZVEC_MEMORY_LIMIT_MB` | auto | soft memory cap |
+| `ZVEC_LOG_FILE_SIZE` / `ZVEC_LOG_OVERDUE_DAYS` | 2048 / 7 | log rotation |
+| `ZVEC_INVERT_TO_FORWARD_SCAN_RATIO` | 0.9 | invert→forward-scan threshold |
+| `ZVEC_BRUTE_FORCE_BY_KEYS_RATIO` | 0.1 | brute-force key-lookup threshold |
+| `ZVEC_FTS_BRUTE_FORCE_BY_KEYS_RATIO` | 0.05 | FTS brute-force threshold |
+| `ZVEC_JIEBA_DICT_DIR` | bundled | jieba Chinese FTS tokenizer dict |
 | `ZVEC_HOST` / `ZVEC_PORT` | `0.0.0.0` / `8000` | bind address |
 
 ---
@@ -159,11 +168,33 @@ bridge casts them to `uint32` automatically):
 { "id": "s1", "vectors": { "sparse": { "1": 0.5, "2": 1.0 } } }
 ```
 
+#### Text → vector (auto-embed)
+
+Instead of pre-computing vectors, send `text` and an `embedding` reference to a
+[registered embedding function](#embeddings--embeddings). The bridge embeds the
+text into the named vector field:
+
+```jsonc
+POST /collections/docs/documents
+{
+  "embedding": { "function": "my_emb", "field": "embedding" },
+  "documents": [
+    { "id": "d1", "text": "machine learning is fun",
+      "fields": { "tag": "a" } }
+  ]
+}
+```
+
+For sparse/BM25 functions, `encoding_type` (`query` | `document`) selects the
+encoding strategy; it is auto-defaulted (document on insert, query on search)
+but can be set explicitly in the `embedding` ref.
+
 ### Search — `/collections/{name}/search`
 
 A single request carries one or more `queries`; each targets one field and is
-either a **vector** query (`vector` or `id`) or a **full-text** query (`fts`).
-Multiple queries are fused by a `reranker`.
+either a **vector** query (`vector` or `id`), a **text** query (`text` + an
+`embedding` ref), or a **full-text** query (`fts`). Multiple queries are fused
+by a `reranker`.
 
 ```jsonc
 POST /collections/docs/search
@@ -184,8 +215,14 @@ POST /collections/docs/search
 
 - `filter` uses zvec's SQL-like syntax: `tag = 'a'`, `age > 30`, `cat IN (...)`.
   Equality is a single `=`.
-- `reranker.type` is `rrf` (reciprocal rank fusion) or `weighted` (needs
-  `weights: [0.7, 0.3]`).
+- **Text query**: send `text` instead of `vector` plus a top-level `embedding`
+  ref; the bridge embeds it first.
+- `reranker.type`:
+  - `rrf` — reciprocal rank fusion (`rank_constant`)
+  - `weighted` — weighted score fusion (`weights: [0.7, 0.3]`)
+  - `local_model` — `DefaultLocalReRanker` cross-encoder (needs `query` +
+    `rerank_field`)
+  - `qwen_model` — `QwenReRanker` API reranker (needs `query` + `rerank_field`)
 
 ### Indexes — `/collections/{name}/indexes/{field_name}`
 
@@ -196,7 +233,24 @@ POST /collections/docs/search
 | `POST` | `/collections/{name}:optimize` | optimize (merge/rebuild) |
 
 Supported index `type`s: `HNSW`, `HNSW_RABITQ`, `IVF`, `FLAT`, `INVERT`,
-`FTS`, `VAMANA`. The query `param.type` must match the field's index type.
+`FTS`, `VAMANA`, `DISKANN`. The query `param.type` must match the field's index
+type. `DISKANN` (disk-based ANN) requires the libaio plugin — load it via
+`POST /admin/diskann:load`.
+
+### Embeddings — `/embeddings`
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/embeddings` | register a named embedding function |
+| `GET` | `/embeddings` | list registered functions |
+| `DELETE` | `/embeddings/{name}` | remove a function |
+| `POST` | `/embeddings/{name}/embed` | embed text(s) into vectors |
+
+Supported `type`s: `bm25`, `default_local_dense`, `default_local_sparse`,
+`openai`, `qwen_dense`, `qwen_sparse`, `jina`, `http`. Heavy optional deps
+(torch, dashtext, openai, …) are imported lazily; a missing dep is reported at
+registration time. Registered functions feed the `embedding` ref on
+insert/search for end-to-end text→vector retrieval.
 
 ### Admin
 
@@ -204,7 +258,10 @@ Supported index `type`s: `HNSW`, `HNSW_RABITQ`, `IVF`, `FLAT`, `INVERT`,
 |---|---|---|
 | `GET` | `/collections/{name}/stats` | doc count + index completeness |
 | `POST` | `/collections/{name}:flush` | flush pending writes |
-| `GET` | `/engine` | bridge + engine info |
+| `GET` | `/engine` | bridge + engine info (libaio, jieba, diskann) |
+| `GET` | `/admin/jieba-dict` | get the jieba FTS tokenizer dict dir |
+| `PUT` | `/admin/jieba-dict` | set the jieba dict dir |
+| `POST` | `/admin/diskann:load` | load the DiskANN plugin |
 | `GET` | `/health` | liveness |
 
 ---
@@ -233,7 +290,11 @@ Every error returns a uniform shape with an HTTP-appropriate status code:
 cd server
 python test_e2e.py          # 39 assertions: lifecycle, DML, search, FTS, filter
 python test_e2e_advanced.py # 19 assertions: index DDL, RRF/weighted, multi-vector, columns
+python test_e2e_embedding.py# 32 assertions: embedding, text-insert/search, jieba, diskann
 ```
 
-Both suites use FastAPI's `TestClient` and a throwaway data dir, so they run
-in-process without a standing server.
+All three suites use FastAPI's `TestClient` and a throwaway data dir, so they
+run in-process without a standing server. The embedding suite uses BM25 (needs
+`pip install dashtext`); model-based rerankers/embeddings (OpenAI, Qwen, local
+sentence-transformer) are validated at construction but require their own
+optional deps / API keys to run end-to-end.
