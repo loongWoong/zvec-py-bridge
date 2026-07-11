@@ -94,6 +94,7 @@ def get_config():
         "ollama_url": kb.OLLAMA_URL,
         "embed_model": kb.EMBED_MODEL,
         "llm_model": kb.LLM_MODEL,
+        "ocr_model": kb.OCR_MODEL,
         "collection": kb.COLLECTION_NAME,
         "corpus_size": len(kb.CORPUS),
         "sample_questions": kb.SAMPLE_QUESTIONS,

@@ -516,9 +516,9 @@ body {
         <div class="upload-area" id="upload-area"
              onclick="document.getElementById('file-input').click()">
           <p>📁 点击或拖拽文件到此处</p>
-          <p class="upload-hint">支持 .md .docx .pdf .xlsx</p>
+          <p class="upload-hint">支持 .md .docx .pdf .xlsx .png .jpg（扫描件自动OCR）</p>
           <input type="file" id="file-input" multiple
-                 accept=".md,.docx,.pdf,.xlsx,.txt"
+                 accept=".md,.docx,.pdf,.xlsx,.txt,.png,.jpg,.jpeg,.bmp,.gif,.tiff,.webp"
                  style="display:none"
                  onchange="handleUpload(this.files)">
         </div>
