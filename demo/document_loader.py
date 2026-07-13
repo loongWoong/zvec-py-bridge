@@ -28,7 +28,79 @@ _OCR_PROMPT = (
 
 
 def ocr_image(image_bytes: bytes) -> str:
-    """调用 Ollama OCR 模型识别图片中的文字，返回 Markdown 格式文本。"""
+    """调用 Ollama OCR 模型识别图片中的文字，返回 Markdown 格式文本。
+
+    大图（高度 > 1000px 或宽度 > 1600px）会被拆分为多段分别 OCR，
+    每段独立去重后再合并，避免模型因缩放导致部分文字无法识别。
+    """
+    import io
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(image_bytes))
+    width, height = img.size
+    print(f"\n  [OCR] 图片尺寸: {width}x{height}")
+
+    # 宽度过大时先等比缩小（避免 Ollama 缩放过多导致文字模糊）
+    if width > 1600:
+        new_width = 1600
+        new_height = int(height * (new_width / width))
+        img = img.resize((new_width, new_height), Image.LANCZOS)
+        width, height = img.size
+        print(f"  [OCR] 宽度缩放: {width}x{height}")
+
+    # 判断是否需要按高度拆分（阈值较低，确保大图都能被分段处理）
+    need_split = height > 800
+
+    if not need_split:
+        # 小图：直接 OCR → 后处理
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        raw = _ocr_single(buf.getvalue())
+        text = _postprocess_ocr(raw)
+        print(f"  [OCR] 单张识别: {len(text)} chars")
+    else:
+        # 大图：上下拆分 → 每段 OCR + 后处理 → 合并
+        chunk_h = 700
+        overlap = 100
+        parts: list[str] = []
+        y = 0
+        part_num = 0
+        while y < height:
+            bottom = min(y + chunk_h, height)
+            crop = img.crop((0, y, width, bottom))
+            buf = io.BytesIO()
+            crop.save(buf, format="PNG")
+            part_num += 1
+            print(f"  [OCR] 拆分段 {part_num}: y={y}-{bottom} ({bottom - y}px)")
+            raw = _ocr_single(buf.getvalue())
+            cleaned = _postprocess_ocr(raw)
+            if cleaned:
+                parts.append(cleaned)
+            y = bottom - overlap if bottom < height else height
+
+        text = _combine_chunks(parts)
+        print(f"  [OCR] 合并 {len(parts)} 段: {len(text)} chars")
+
+    print(f"{'='*60}")
+    print(text[:4000])
+    if len(text) > 4000:
+        print(f"  ... (总长 {len(text)} chars)")
+    print(f"{'='*60}\n")
+    return text
+
+
+def _postprocess_ocr(raw: str) -> str:
+    """对单段 OCR 原始输出做后处理：表格格式化 + HTML转换 + 去重。"""
+    if not raw:
+        return ""
+    text = format_tabular_to_markdown(raw)
+    text = html_tables_to_markdown(text)
+    text = deduplicate_ocr(text)
+    return text
+
+
+def _ocr_single(image_bytes: bytes) -> str:
+    """对单张图片调用 OCR 模型，返回原始文本。"""
     import base64
     import requests
 
@@ -38,45 +110,37 @@ def ocr_image(image_bytes: bytes) -> str:
         "prompt": _OCR_PROMPT,
         "images": [img_b64],
         "stream": False,
-        "options": {"temperature": 0.1, "num_predict": 8000},
+        "options": {"temperature": 0.1, "num_predict": 4000},
     }, timeout=180)
     if r.status_code != 200:
         print(f"  [OCR] 错误: HTTP {r.status_code} - {r.text[:200]}")
         return ""
+    return r.json().get("response", "").strip()
 
-    text = r.json().get("response", "").strip()
 
-    # === 日志：打印 OCR 各阶段结果，便于排查问题 ===
-    print(f"\n{'='*60}")
-    print(f"  [OCR] 原始模型输出 ({len(text)} chars):")
-    print(f"{'-'*60}")
-    print(text[:8000])
-    if len(text) > 8000:
-        print(f"  ... (截断，总长 {len(text)} chars)")
-    print(f"{'='*60}")
+def _combine_chunks(parts: list[str]) -> str:
+    """合并多段 OCR 结果，去除重叠区域的重复行。"""
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
 
-    # 1. 空格/制表符对齐的表格 → Markdown 表格
-    text = format_tabular_to_markdown(text)
-    # 2. HTML 表格 → Markdown 表格
-    text = html_tables_to_markdown(text)
+    combined_lines = parts[0].split("\n")
+    for i in range(1, len(parts)):
+        next_lines = [l.strip() for l in parts[i].split("\n") if l.strip()]
+        if not next_lines:
+            continue
+        # 查找重叠行数：combined 末尾与 next 开头相同的行
+        overlap = 0
+        for j in range(min(len(combined_lines), len(next_lines), 15), 0, -1):
+            tail = [l.strip() for l in combined_lines[-j:] if l.strip()]
+            head = next_lines[:j]
+            if tail == head:
+                overlap = j
+                break
+        combined_lines.extend(next_lines[overlap:])
 
-    print(f"  [OCR] 表格格式化后 ({len(text)} chars):")
-    print(f"{'-'*60}")
-    print(text[:8000])
-    if len(text) > 8000:
-        print(f"  ... (截断，总长 {len(text)} chars)")
-    print(f"{'='*60}")
-
-    result = deduplicate_ocr(text)
-
-    print(f"  [OCR] 去重后最终结果 ({len(result)} chars):")
-    print(f"{'-'*60}")
-    print(result[:8000])
-    if len(result) > 8000:
-        print(f"  ... (截断，总长 {len(result)} chars)")
-    print(f"{'='*60}\n")
-
-    return result
+    return "\n".join(combined_lines)
 
 
 # ====================================================================== #
