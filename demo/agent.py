@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import requests
@@ -29,6 +30,65 @@ import kb_data as kb
 # ====================================================================== #
 DOCUMENTS: list[dict] = []
 CHUNKS: dict[str, dict] = {}
+
+# 持久化状态文件
+_STATE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATE_FILE = os.path.join(_STATE_DIR, "kb_state.json")
+UPLOADS_DIR = os.path.join(_STATE_DIR, "uploads")
+
+
+# ====================================================================== #
+#  持久化 — save / load / clear / reset
+# ====================================================================== #
+def save_state(extra: dict | None = None) -> None:
+    """将 DOCUMENTS / CHUNKS 序列化到 JSON 文件，实现重启后恢复。"""
+    data = {
+        "documents": DOCUMENTS,
+        "chunks": CHUNKS,
+    }
+    if extra:
+        data.update(extra)
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_state() -> dict | None:
+    """从 JSON 文件恢复 DOCUMENTS / CHUNKS。返回 extra 字段或 None。"""
+    global DOCUMENTS, CHUNKS
+    if not os.path.exists(STATE_FILE):
+        return None
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        DOCUMENTS = data.get("documents", [])
+        CHUNKS = data.get("chunks", {})
+        if not DOCUMENTS:
+            return None
+        # 返回 extra 字段（dimension, upload_count 等）
+        return {k: v for k, v in data.items() if k not in ("documents", "chunks")}
+    except Exception:
+        return None
+
+
+def clear_state() -> None:
+    """删除持久化状态文件。"""
+    if os.path.exists(STATE_FILE):
+        os.remove(STATE_FILE)
+
+
+def reset() -> None:
+    """清空内存中的本体（cleanup 时调用）。"""
+    global DOCUMENTS, CHUNKS
+    DOCUMENTS = []
+    CHUNKS = {}
+
+
+def get_document(document_id: str) -> dict | None:
+    """按 ID 获取单个文档（含分块）。"""
+    for doc in DOCUMENTS:
+        if doc["document_id"] == document_id:
+            return doc
+    return None
 
 
 def build_ontology() -> None:
@@ -64,7 +124,9 @@ def build_ontology() -> None:
             "char_count": len(content),
             "chunks": doc_chunks,
             "source_file": "",
+            "source_path": "",
         })
+    save_state()
 
 
 def add_documents(parsed_docs: list[dict]) -> None:
@@ -94,7 +156,9 @@ def add_documents(parsed_docs: list[dict]) -> None:
             "char_count": len(doc["content"]),
             "chunks": doc_chunks,
             "source_file": doc.get("source_file", ""),
+            "source_path": doc.get("source_path", ""),
         })
+    save_state()
 
 
 # ====================================================================== #

@@ -53,6 +53,32 @@ _state: dict = {
 }
 
 
+@app.on_event("startup")
+def startup():
+    """启动时检查是否已有持久化的知识库，避免每次重启都重新初始化。"""
+    os.makedirs(agent.UPLOADS_DIR, exist_ok=True)
+    extra = agent.load_state()
+    if extra is not None:
+        # 本体已从磁盘恢复，验证 zvec 集合是否仍然存在
+        try:
+            r = kb.zvec_api("GET", f"/collections/{kb.COLLECTION_NAME}", timeout=5)
+            if r.status_code == 200:
+                _state["initialized"] = True
+                _state["dimension"] = extra.get("dimension", 0)
+                _state["doc_count"] = len(agent.DOCUMENTS)
+                _state["upload_count"] = extra.get("upload_count", 0)
+                print(f"  知识库已从持久化状态恢复：{len(agent.DOCUMENTS)} 篇文档")
+                return
+        except Exception:
+            pass
+        # zvec 集合不存在，清除过期状态
+        agent.clear_state()
+        agent.reset()
+        print("  持久化状态已失效（zvec 集合不存在），需要重新初始化")
+    else:
+        print("  未找到持久化状态，需要初始化知识库")
+
+
 # ====================================================================== #
 #  请求模型
 # ====================================================================== #
@@ -134,6 +160,7 @@ def get_documents():
                 "char_count": d["char_count"],
                 "chunk_count": len(d["chunks"]),
                 "source_file": d.get("source_file", ""),
+                "preview": d["content"][:100] + "..." if len(d["content"]) > 100 else d["content"],
             }
             for d in agent.DOCUMENTS
         ]}
@@ -146,14 +173,66 @@ def get_documents():
             "char_count": len(d["content"]),
             "chunk_count": 0,
             "source_file": "",
+            "preview": d["content"][:100] + "..." if len(d["content"]) > 100 else d["content"],
         }
         for d in kb.CORPUS
     ]}
 
 
+@app.get("/api/documents/{document_id}")
+def get_document(document_id: str):
+    """返回单篇文档的完整内容（含分块）。"""
+    doc = agent.get_document(document_id)
+    if doc:
+        return {
+            "document_id": doc["document_id"],
+            "title": doc["title"],
+            "content": doc["content"],
+            "category": doc["category"],
+            "char_count": doc["char_count"],
+            "source_file": doc.get("source_file", ""),
+            "source_path": doc.get("source_path", ""),
+            "chunks": [
+                {
+                    "chunk_id": c["chunk_id"],
+                    "heading": c["heading"],
+                    "content": c["content"],
+                    "ordinal": c["ordinal"],
+                }
+                for c in doc["chunks"]
+            ],
+        }
+    # 内置语料 fallback
+    for d in kb.CORPUS:
+        if d["id"] == document_id:
+            return {
+                "document_id": d["id"],
+                "title": d["title"],
+                "content": d["content"],
+                "category": "RAG/向量数据库",
+                "char_count": len(d["content"]),
+                "source_file": "",
+                "source_path": "",
+                "chunks": [],
+            }
+    raise HTTPException(status_code=404, detail="文档不存在")
+
+
+@app.get("/api/files/{document_id}")
+def get_file(document_id: str):
+    """返回上传的原始文件（图片/PDF/DOCX 等）。"""
+    for fname in os.listdir(agent.UPLOADS_DIR):
+        if fname.startswith(document_id + "_"):
+            return FileResponse(
+                os.path.join(agent.UPLOADS_DIR, fname),
+                filename=fname.split("_", 1)[1] if "_" in fname else fname,
+            )
+    raise HTTPException(status_code=404, detail="原始文件不存在（可能是内置语料）")
+
+
 @app.post("/api/upload")
 async def upload_documents(files: list[UploadFile] = File(...)):
-    """上传文档（Markdown/DOCX/PDF/XLSX），解析→切分→嵌入入库→更新本体。"""
+    """上传文档（Markdown/DOCX/PDF/XLSX/图片），解析→切分→嵌入入库→更新本体。"""
     if not _state["initialized"]:
         raise HTTPException(status_code=400, detail="知识库未初始化，请先点击「初始化知识库」")
 
@@ -168,6 +247,15 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             doc_id = f"upload_{_state['upload_count'] + 1}"
             _state["upload_count"] += 1
             parsed["id"] = doc_id
+
+            # 保存原始文件到 uploads/ 目录
+            safe_name = file.filename.replace("/", "_").replace("\\", "_")
+            saved_name = f"{doc_id}_{safe_name}"
+            saved_path = os.path.join(agent.UPLOADS_DIR, saved_name)
+            with open(saved_path, "wb") as f:
+                f.write(content)
+            parsed["source_path"] = saved_path
+
             parsed_docs.append(parsed)
 
             # 按 chunk 准备入库文档
@@ -205,6 +293,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
         except kb.KBError as e:
             raise HTTPException(status_code=400, detail=str(e))
         agent.add_documents(parsed_docs)
+        agent.save_state({"dimension": _state["dimension"], "upload_count": _state["upload_count"]})
 
     _state["doc_count"] = len(agent.DOCUMENTS)
     return {"uploaded": results, "total_chunks": len(documents_to_ingest)}
@@ -223,6 +312,7 @@ def init_kb():
         _state["dimension"] = result["dimension"]
         _state["doc_count"] = result["doc_count"]
         _state["upload_count"] = 0
+        agent.save_state({"dimension": result["dimension"], "upload_count": 0})
         return result
     except kb.KBError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -278,6 +368,11 @@ def api_cleanup():
     """清理知识库资源。"""
     try:
         kb.cleanup()
+        agent.reset()
+        agent.clear_state()
+        # 清空 uploads 目录
+        for fname in os.listdir(agent.UPLOADS_DIR):
+            os.remove(os.path.join(agent.UPLOADS_DIR, fname))
         _state["initialized"] = False
         _state["dimension"] = 0
         _state["doc_count"] = 0

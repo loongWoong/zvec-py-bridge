@@ -51,7 +51,7 @@ python main.py              # 默认监听 0.0.0.0:8666
 
 ```bash
 ollama pull qwen3-embedding:4b    # 嵌入模型（必需）
-ollama pull qwen3:4b              # 生成模型（RAG 回答用，可选）
+ollama pull pdurugyan/qwen3.5-9b-deepseek-v4-flash-Q4_K_M:latest            # 生成模型（RAG 回答用，可选）
 ```
 
 ## 方式一：Web 界面（推荐）

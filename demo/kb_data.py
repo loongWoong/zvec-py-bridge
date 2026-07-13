@@ -14,7 +14,7 @@ import requests
 ZVEC_URL = os.environ.get("ZVEC_URL", "http://localhost:8666")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:4b")
-LLM_MODEL = os.environ.get("LLM_MODEL", "qwen3:4b")  # 生成回答用，可选
+LLM_MODEL = os.environ.get("LLM_MODEL", "pdurugyan/qwen3.5-9b-deepseek-v4-flash-Q4_K_M:latest")  # 生成回答用，可选
 OCR_MODEL = os.environ.get("OCR_MODEL", "glm-ocr")    # OCR 识别用
 
 COLLECTION_NAME = "rag_demo"

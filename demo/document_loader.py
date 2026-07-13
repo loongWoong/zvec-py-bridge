@@ -17,40 +17,87 @@ import kb_data as kb
 # ====================================================================== #
 #  OCR — 调用 Ollama glm-ocr 模型识别图片文字
 # ====================================================================== #
+_OCR_PROMPT = (
+    "请识别图片中的全部文字内容，使用Markdown格式输出。要求：\n"
+    "1. 表格必须使用Markdown表格语法（| 列1 | 列2 |）保留原始表格结构\n"
+    "2. 标题使用 # 标记\n"
+    "3. 列表使用 - 或 1. 标记\n"
+    "4. 不要输出HTML标签\n"
+    "5. 不要重复输出相同内容\n"
+)
+
+
 def ocr_image(image_bytes: bytes) -> str:
-    """调用 Ollama OCR 模型识别图片中的文字，返回去重后的纯文本。"""
+    """调用 Ollama OCR 模型识别图片中的文字，返回 Markdown 格式文本。"""
     import base64
     import requests
 
     img_b64 = base64.b64encode(image_bytes).decode()
     r = requests.post(f"{kb.OLLAMA_URL}/api/generate", json={
         "model": kb.OCR_MODEL,
-        "prompt": "请识别图片中的文字内容，直接输出纯文本，不要重复。",
+        "prompt": _OCR_PROMPT,
         "images": [img_b64],
         "stream": False,
-        "options": {"temperature": 0.1, "num_predict": 800},
-    }, timeout=120)
+        "options": {"temperature": 0.1, "num_predict": 2000},
+    }, timeout=180)
     if r.status_code != 200:
         return ""
     text = r.json().get("response", "").strip()
+    text = html_tables_to_markdown(text)
     return deduplicate_ocr(text)
+
+
+def html_tables_to_markdown(text: str) -> str:
+    """将模型输出的 HTML 表格转换为 Markdown 表格。"""
+    def _convert_table(match: re.Match) -> str:
+        html = match.group(0)
+        rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.DOTALL | re.IGNORECASE)
+        if not rows:
+            return html
+        md_rows: list[str] = []
+        for i, row in enumerate(rows):
+            cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.DOTALL | re.IGNORECASE)
+            cells = [re.sub(r"<[^>]+>", "", c).strip() for c in cells]
+            if not cells:
+                continue
+            md_rows.append("| " + " | ".join(cells) + " |")
+            if i == 0:
+                md_rows.append("| " + " | ".join(["---"] * len(cells)) + " |")
+        return "\n".join(md_rows) if md_rows else html
+
+    return re.sub(
+        r"<table[^>]*>.*?</table>", _convert_table, text, flags=re.DOTALL | re.IGNORECASE
+    )
 
 
 def deduplicate_ocr(text: str) -> str:
     """去除 OCR 模型重复输出的内容。
 
-    glm-ocr 等小模型容易重复同一段文本，还会输出 markdown 代码围栏。
-    策略：去掉代码围栏 → 按空行分块 → 收集到首次重复为止。
+    glm-ocr 等小模型容易重复同一段文本。策略：
+    1. 去掉 markdown 代码围栏
+    2. 逐行尝试作为锚点，找到第一个在文本中出现两次的行
+    3. 截取第二次出现之前的内容（即首次完整输出）
     """
     if not text:
         return ""
     # 去掉 markdown 代码围栏 (```markdown, ```, 等)
     text = re.sub(r"```+\w*", "", text).strip()
+    if not text:
+        return ""
 
-    # 按连续空行分块
+    # 逐行尝试作为锚点，找到第一个出现两次的行
+    for line in text.split("\n"):
+        line = line.strip()
+        if len(line) < 3:
+            continue  # 跳过太短的行
+        first_pos = text.find(line)
+        second_pos = text.find(line, first_pos + len(line))
+        if second_pos > first_pos:
+            # 找到重复，截取第二次出现之前的内容
+            return text[:second_pos].rstrip()
+
+    # 没有找到重复，按空行分块去重（fallback）
     blocks = re.split(r"\n{2,}", text)
-
-    # 收集非空块，遇到重复即停止
     seen: set[str] = set()
     unique_blocks: list[str] = []
     for block in blocks:
@@ -58,10 +105,9 @@ def deduplicate_ocr(text: str) -> str:
         if not block:
             continue
         if block in seen:
-            break  # 检测到重复，截断
+            break
         seen.add(block)
         unique_blocks.append(block)
-
     return "\n\n".join(unique_blocks) if unique_blocks else text.strip()
 
 

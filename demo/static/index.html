@@ -445,12 +445,64 @@ body {
   margin-left: 6px;
 }
 
+/* ===== Document Viewer Modal ===== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-content {
+  background: var(--card); border-radius: 12px;
+  box-shadow: var(--shadow-lg); max-width: 800px; width: 90%;
+  max-height: 85vh; display: flex; flex-direction: column;
+}
+.modal-header {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 700; font-size: 15px;
+}
+.modal-close {
+  background: none; border: none; font-size: 20px;
+  cursor: pointer; color: var(--muted); padding: 0 4px;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-body h1, .modal-body h2, .modal-body h3 { margin: 12px 0 6px; }
+.modal-body p { margin: 8px 0; line-height: 1.7; }
+.modal-body table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+.modal-body th, .modal-body td { border: 1px solid var(--border); padding: 6px 10px; font-size: 13px; }
+.modal-body code { background: #F1F5F9; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.modal-body pre { background: #F8FAFC; padding: 12px; border-radius: 6px; overflow-x: auto; }
+.doc-section { margin-bottom: 18px; }
+.doc-section-title { font-weight: 700; color: var(--primary); margin-bottom: 6px; font-size: 13px; }
+.doc-chunks { border-left: 2px solid var(--border); margin-left: 8px; }
+.doc-chunk {
+  padding: 8px 12px; margin: 4px 0; font-size: 13px;
+  border-radius: 0 6px 6px 0; line-height: 1.6;
+}
+.doc-chunk-heading { font-weight: 600; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.chunk-highlight {
+  background: #FEF3C7; border-left: 3px solid var(--warning);
+}
+.file-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; background: #F0F9FF; border: 1px solid #BAE6FD;
+  border-radius: 6px; color: var(--primary); text-decoration: none;
+  font-size: 13px; margin: 8px 0; cursor: pointer;
+}
+.file-link:hover { background: #E0F2FE; }
+.result-position { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.result-actions { margin-top: 8px; }
+.doc-item { cursor: pointer; transition: background .1s; }
+.doc-item:hover { background: #F8FAFC; }
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .container { flex-direction: column; }
   .sidebar { width: 100%; }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
@@ -677,10 +729,10 @@ function renderDocuments(docs) {
     const source = d.source_file ? `<span class="doc-source">${d.category}</span>` : '';
     const chunks = d.chunk_count ? ` · ${d.chunk_count} 块` : '';
     return `
-    <div class="doc-item">
+    <div class="doc-item" onclick="viewDocument('${d.id}')">
       <div class="doc-id">${d.id}${source}</div>
       <div class="doc-title">${d.title}${d.source_file ? ` <span style="font-size:10px;color:var(--muted)">(${d.source_file})</span>` : ''}</div>
-      <div class="doc-content">${d.content ? d.content.slice(0,100) : ''}...${chunks}</div>
+      <div class="doc-content">${d.preview || ''}${chunks}</div>
     </div>
   `}).join('');
 }
@@ -702,8 +754,10 @@ function renderResults(docs) {
     ${docs.map(d => {
       const pct = Math.max(2, Math.min(100, d.score * 100));
       const color = scoreColor(d.score);
+      const docId = d.document_id || d.id;
+      const heading = d.heading || '';
       return `
-        <div class="result-card">
+        <div class="result-card" style="cursor:pointer" onclick="viewResult('${docId}','${d.id}')">
           <div class="result-head">
             <div>
               <span class="result-id">${d.id}</span>
@@ -714,7 +768,11 @@ function renderResults(docs) {
               <span class="score-value">${d.score.toFixed(4)}</span>
             </div>
           </div>
-          <div class="result-content">${d.content}</div>
+          ${heading ? `<div class="result-position">📍 ${heading}</div>` : ''}
+          <div class="result-content">${escapeHtml(d.content)}</div>
+          <div class="result-actions">
+            <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewResult('${docId}','${d.id}')">📄 查看原文</button>
+          </div>
         </div>
       `;
     }).join('')}
@@ -988,11 +1046,103 @@ async function handleAgentAsk() {
   }
 }
 // ====================================================================
+//  Document viewer modal
+// ====================================================================
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+function closeModal(event) {
+  if (event.target.id === 'doc-modal') {
+    document.getElementById('doc-modal').style.display = 'none';
+  }
+}
+
+async function viewDocument(docId, highlightChunkId) {
+  const modal = document.getElementById('doc-modal');
+  const title = document.getElementById('modal-title');
+  const body = document.getElementById('modal-body');
+  title.textContent = '加载中...';
+  body.innerHTML = '<div class="loading"><div class="spinner"></div> 加载文档...</div>';
+  modal.style.display = 'flex';
+  try {
+    const data = await api('GET', `/api/documents/${docId}`);
+    title.textContent = data.title;
+    let html = '';
+    // 元数据
+    html += `<div class="doc-section">
+      <div class="doc-section-title">📋 文档信息</div>
+      <div style="font-size:12px;color:var(--muted)">
+        ID: ${data.document_id} · 分类: ${data.category} · 字符数: ${data.char_count}
+        ${data.source_file ? ` · 来源: ${data.source_file}` : ''}
+      </div>
+    </div>`;
+    // 原始文件
+    if (data.source_file) {
+      const isImage = ['png','jpg','jpeg','bmp','gif','webp','tiff'].some(
+        t => (data.source_file||'').toLowerCase().endsWith(t)
+      );
+      html += `<div class="doc-section"><div class="doc-section-title">📎 原始文件</div>`;
+      if (isImage) {
+        html += `<img src="/api/files/${docId}" style="max-width:100%;border-radius:8px;margin:8px 0" />`;
+      }
+      html += `<a class="file-link" href="/api/files/${docId}" target="_blank">📥 查看/下载 ${data.source_file}</a></div>`;
+    }
+    // 文档内容 (Markdown 渲染)
+    html += `<div class="doc-section"><div class="doc-section-title">📄 文档内容</div>`;
+    if (typeof marked !== 'undefined') {
+      html += `<div>${marked.parse(data.content)}</div>`;
+    } else {
+      html += `<div style="white-space:pre-wrap">${escapeHtml(data.content)}</div>`;
+    }
+    html += `</div>`;
+    // 分块列表
+    if (data.chunks && data.chunks.length) {
+      html += `<div class="doc-section"><div class="doc-section-title">📑 分块列表 (${data.chunks.length})</div><div class="doc-chunks">`;
+      for (const c of data.chunks) {
+        const hl = (highlightChunkId === c.chunk_id) ? 'chunk-highlight' : '';
+        html += `<div class="doc-chunk ${hl}" id="chunk-${c.chunk_id}">
+          <div class="doc-chunk-heading">${c.heading || '无标题'} · #${c.ordinal}</div>
+          <div>${escapeHtml(c.content)}</div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    body.innerHTML = html;
+    if (highlightChunkId) {
+      setTimeout(() => {
+        const el = document.getElementById(`chunk-${highlightChunkId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  } catch (e) {
+    body.innerHTML = `<div class="empty-hint" style="color:var(--error)">❌ ${e.message}</div>`;
+  }
+}
+
+function viewResult(docId, chunkId) {
+  viewDocument(docId, chunkId);
+}
+
+// ====================================================================
 (async function() {
   await Promise.all([loadConfig(), loadDocuments(), refreshStatus()]);
   // poll status every 15s
   setInterval(refreshStatus, 15000);
 })();
 </script>
+
+<!-- Document Viewer Modal -->
+<div class="modal-overlay" id="doc-modal" style="display:none" onclick="closeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span id="modal-title">文档标题</span>
+      <button class="modal-close" onclick="document.getElementById('doc-modal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
 </body>
 </html>
