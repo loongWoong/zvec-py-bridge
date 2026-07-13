@@ -2,3 +2,6 @@ _ft
 _st
 *.pyc
 /test_data*
+/_demo_data*
+server/data/*
+demo/uploads/*
