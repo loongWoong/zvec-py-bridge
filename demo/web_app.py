@@ -63,8 +63,15 @@ def startup():
         try:
             r = kb.zvec_api("GET", f"/collections/{kb.COLLECTION_NAME}", timeout=5)
             if r.status_code == 200:
+                # 集合存在，但嵌入函数注册是内存态（zvec 重启后丢失），需重新注册
+                dimension = extra.get("dimension", 2560)
+                try:
+                    kb.register_embedding(dimension)
+                    print(f"  嵌入函数已重新注册 (dimension={dimension})")
+                except Exception as e:
+                    print(f"  ⚠ 嵌入函数注册失败: {e}，请检查 Ollama 是否运行")
                 _state["initialized"] = True
-                _state["dimension"] = extra.get("dimension", 0)
+                _state["dimension"] = dimension
                 _state["doc_count"] = len(agent.DOCUMENTS)
                 _state["upload_count"] = extra.get("upload_count", 0)
                 print(f"  知识库已从持久化状态恢复：{len(agent.DOCUMENTS)} 篇文档")

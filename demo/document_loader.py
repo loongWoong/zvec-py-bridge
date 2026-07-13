@@ -38,13 +38,151 @@ def ocr_image(image_bytes: bytes) -> str:
         "prompt": _OCR_PROMPT,
         "images": [img_b64],
         "stream": False,
-        "options": {"temperature": 0.1, "num_predict": 2000},
+        "options": {"temperature": 0.1, "num_predict": 8000},
     }, timeout=180)
     if r.status_code != 200:
+        print(f"  [OCR] 错误: HTTP {r.status_code} - {r.text[:200]}")
         return ""
+
     text = r.json().get("response", "").strip()
+
+    # === 日志：打印 OCR 各阶段结果，便于排查问题 ===
+    print(f"\n{'='*60}")
+    print(f"  [OCR] 原始模型输出 ({len(text)} chars):")
+    print(f"{'-'*60}")
+    print(text[:8000])
+    if len(text) > 8000:
+        print(f"  ... (截断，总长 {len(text)} chars)")
+    print(f"{'='*60}")
+
+    # 1. 空格/制表符对齐的表格 → Markdown 表格
+    text = format_tabular_to_markdown(text)
+    # 2. HTML 表格 → Markdown 表格
     text = html_tables_to_markdown(text)
-    return deduplicate_ocr(text)
+
+    print(f"  [OCR] 表格格式化后 ({len(text)} chars):")
+    print(f"{'-'*60}")
+    print(text[:8000])
+    if len(text) > 8000:
+        print(f"  ... (截断，总长 {len(text)} chars)")
+    print(f"{'='*60}")
+
+    result = deduplicate_ocr(text)
+
+    print(f"  [OCR] 去重后最终结果 ({len(result)} chars):")
+    print(f"{'-'*60}")
+    print(result[:8000])
+    if len(result) > 8000:
+        print(f"  ... (截断，总长 {len(result)} chars)")
+    print(f"{'='*60}\n")
+
+    return result
+
+
+# ====================================================================== #
+#  表格检测与格式化 — 将空格/制表符对齐的表格数据转为 Markdown 表格
+# ====================================================================== #
+def format_tabular_to_markdown(text: str) -> str:
+    """检测 OCR 输出中的表格数据（制表符/多空格分隔），转为 Markdown 表格。
+
+    OCR 模型经常输出用空格对齐的表格数据，但不使用 Markdown 语法。
+    此函数检测连续的多列行，自动转换为 Markdown 表格格式。
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    i = 0
+
+    while i < len(lines):
+        cols = _split_columns(lines[i])
+
+        if cols and len(cols) >= 2:
+            col_count = len(cols)
+            table_rows = [cols]
+            j = i + 1
+            while j < len(lines):
+                row_cols = _split_columns(lines[j])
+                if not row_cols:
+                    break
+                # 尝试调整列数以匹配表头
+                row_cols = _adjust_columns(row_cols, col_count)
+                table_rows.append(row_cols)
+                j += 1
+
+            if len(table_rows) >= 2:
+                result.append(_to_markdown_table(table_rows, col_count))
+                i = j
+                continue
+
+        result.append(lines[i])
+        i += 1
+
+    return "\n".join(result)
+
+
+def _split_columns(line: str) -> list[str] | None:
+    """将一行文本按制表符或 2+ 空格分割为列。"""
+    line = line.rstrip()
+    if not line.strip():
+        return None
+
+    # 优先按制表符分割
+    if "\t" in line:
+        cols = [c.strip() for c in line.split("\t")]
+        cols = [c for c in cols if c]
+        return cols if len(cols) >= 2 else None
+
+    # 按 2+ 空格分割
+    parts = re.split(r" {2,}", line.strip())
+    cols = [p.strip() for p in parts if p.strip()]
+    return cols if len(cols) >= 2 else None
+
+
+def _adjust_columns(cols: list[str], expected: int) -> list[str]:
+    """调整列数以匹配期望值。
+
+    列数不足时：尝试将最后一列按短标记（如 ✓ ✗ 是 否）拆分为两列。
+    列数过多时：合并多余的列到最后一列。
+    """
+    if len(cols) == expected:
+        return cols
+
+    if len(cols) < expected:
+        # 保留除最后一列外的所有列，只尝试拆分最后一列
+        result = list(cols[:-1])
+        last_col = cols[-1]
+        if len(result) < expected - 1:
+            # 尝试拆分：短标记(1-3字符) + 空格 + 剩余内容
+            m = re.match(r"^(\S{1,3})\s+(.+)", last_col)
+            if m and len(result) + 2 <= expected:
+                result.append(m.group(1))
+                result.append(m.group(2))
+            else:
+                result.append(last_col)
+        else:
+            result.append(last_col)
+        while len(result) < expected:
+            result.append("")
+        return result[:expected]
+
+    # 列数过多，合并
+    return cols[: expected - 1] + [" ".join(cols[expected - 1:])]
+
+
+def _to_markdown_table(rows: list[list[str]], col_count: int) -> str:
+    """将行数据转为 Markdown 表格字符串。"""
+    md: list[str] = []
+    # 表头
+    header = rows[0][:col_count]
+    while len(header) < col_count:
+        header.append("")
+    md.append("| " + " | ".join(c.strip() for c in header) + " |")
+    md.append("| " + " | ".join(["---"] * col_count) + " |")
+    # 数据行
+    for row in rows[1:]:
+        while len(row) < col_count:
+            row.append("")
+        md.append("| " + " | ".join(c.strip() for c in row[:col_count]) + " |")
+    return "\n".join(md)
 
 
 def html_tables_to_markdown(text: str) -> str:
