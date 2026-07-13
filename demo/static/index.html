@@ -496,6 +496,33 @@ body {
 .doc-item { cursor: pointer; transition: background .1s; }
 .doc-item:hover { background: #F8FAFC; }
 
+/* ===== Render mode toggle ===== */
+.render-toggle {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.render-toggle:hover { border-color: var(--primary); color: var(--primary); }
+.content-raw {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  display: none;
+}
+body.raw-mode .content-markdown { display: none; }
+body.raw-mode .content-raw { display: block; }
+.doc-chunk .content-markdown p { margin: 4px 0; }
+.doc-chunk .content-markdown table { font-size: 12px; }
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .container { flex-direction: column; }
@@ -627,7 +654,9 @@ body {
 
     <!-- Results -->
     <div class="card" id="results-card" style="display:none">
-      <div class="card-header">📄 检索结果</div>
+      <div class="card-header">📄 检索结果
+        <button class="render-toggle" onclick="switchRenderMode()">📝 Markdown</button>
+      </div>
       <div class="card-body" id="results-body"></div>
     </div>
 
@@ -648,6 +677,7 @@ body {
 let kbReady = false;
 let busy = false;
 let currentMode = 'rag';  // 'rag' | 'agent'
+let renderMode = 'markdown';  // 'markdown' | 'raw'
 
 // ====================================================================
 //  API helpers
@@ -769,7 +799,7 @@ function renderResults(docs) {
             </div>
           </div>
           ${heading ? `<div class="result-position">📍 ${heading}</div>` : ''}
-          <div class="result-content">${escapeHtml(d.content)}</div>
+          <div class="result-content">${renderContent(d.content)}</div>
           <div class="result-actions">
             <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();viewResult('${docId}','${d.id}')">📄 查看原文</button>
           </div>
@@ -1054,6 +1084,20 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function switchRenderMode() {
+  renderMode = renderMode === 'markdown' ? 'raw' : 'markdown';
+  document.body.classList.toggle('raw-mode', renderMode === 'raw');
+  document.querySelectorAll('.render-toggle').forEach(btn => {
+    btn.textContent = renderMode === 'markdown' ? '📝 Markdown' : '📄 原文';
+  });
+}
+
+function renderContent(content) {
+  const safe = escapeHtml(content);
+  const md = (typeof marked !== 'undefined') ? marked.parse(content) : safe;
+  return `<div class="content-markdown">${md}</div><div class="content-raw">${safe}</div>`;
+}
+
 function closeModal(event) {
   if (event.target.id === 'doc-modal') {
     document.getElementById('doc-modal').style.display = 'none';
@@ -1070,6 +1114,7 @@ async function viewDocument(docId, highlightChunkId) {
   try {
     const data = await api('GET', `/api/documents/${docId}`);
     title.textContent = data.title;
+    const toggleLabel = renderMode === 'markdown' ? '📝 Markdown' : '📄 原文';
     let html = '';
     // 元数据
     html += `<div class="doc-section">
@@ -1090,22 +1135,22 @@ async function viewDocument(docId, highlightChunkId) {
       }
       html += `<a class="file-link" href="/api/files/${docId}" target="_blank">📥 查看/下载 ${data.source_file}</a></div>`;
     }
-    // 文档内容 (Markdown 渲染)
-    html += `<div class="doc-section"><div class="doc-section-title">📄 文档内容</div>`;
-    if (typeof marked !== 'undefined') {
-      html += `<div>${marked.parse(data.content)}</div>`;
-    } else {
-      html += `<div style="white-space:pre-wrap">${escapeHtml(data.content)}</div>`;
-    }
+    // 文档内容 (Markdown 渲染 + 原文切换)
+    html += `<div class="doc-section"><div class="doc-section-title">📄 文档内容
+      <button class="render-toggle" onclick="switchRenderMode()">${toggleLabel}</button>
+    </div>`;
+    html += renderContent(data.content);
     html += `</div>`;
     // 分块列表
     if (data.chunks && data.chunks.length) {
-      html += `<div class="doc-section"><div class="doc-section-title">📑 分块列表 (${data.chunks.length})</div><div class="doc-chunks">`;
+      html += `<div class="doc-section"><div class="doc-section-title">📑 分块列表 (${data.chunks.length})
+        <button class="render-toggle" onclick="switchRenderMode()">${toggleLabel}</button>
+      </div><div class="doc-chunks">`;
       for (const c of data.chunks) {
         const hl = (highlightChunkId === c.chunk_id) ? 'chunk-highlight' : '';
         html += `<div class="doc-chunk ${hl}" id="chunk-${c.chunk_id}">
           <div class="doc-chunk-heading">${c.heading || '无标题'} · #${c.ordinal}</div>
-          <div>${escapeHtml(c.content)}</div>
+          ${renderContent(c.content)}
         </div>`;
       }
       html += `</div></div>`;
