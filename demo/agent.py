@@ -417,6 +417,9 @@ def _parse_llm_response(data: dict):
 
     tool_calls 归一化为 [{id, name, arguments(dict)}, ...]，
     屏蔽 Ollama（arguments 为 dict）与 OpenAI（arguments 为 JSON 字符串）差异。
+
+    部分 OpenAI 兼容端点不会返回 tool_calls 的 id，缺失时自动生成，
+    否则下游 tool_call_id 为空会导致请求被拒绝（400）。
     """
     if kb.LLM_API == "openai":
         msg = data["choices"][0]["message"]
@@ -426,7 +429,7 @@ def _parse_llm_response(data: dict):
     content = msg.get("content") or ""
     raw_calls = msg.get("tool_calls") or []
     tool_calls = []
-    for tc in raw_calls:
+    for idx, tc in enumerate(raw_calls):
         fn = tc.get("function", {})
         args = fn.get("arguments", {})
         if isinstance(args, str):
@@ -437,11 +440,20 @@ def _parse_llm_response(data: dict):
         if not isinstance(args, dict):
             args = {}
         tool_calls.append({
-            "id": tc.get("id", ""),
+            "id": tc.get("id") or f"call_{idx}",
             "name": fn.get("name", ""),
             "arguments": args,
         })
     return content, tool_calls
+
+
+def _clean_answer(text: str) -> str:
+    """清理最终回答：去除 <think>...</think> 推理块（部分推理模型经 OpenAI 接口会输出）。"""
+    if not text:
+        return text
+    import re
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return text.strip()
 
 
 def _to_provider_messages(messages: list[dict]) -> list[dict]:
@@ -451,9 +463,10 @@ def _to_provider_messages(messages: list[dict]) -> list[dict]:
         role = m["role"]
         if role == "assistant" and m.get("tool_calls"):
             if kb.LLM_API == "openai":
+                # OpenAI 要求带 tool_calls 的 assistant 消息 content 可为 null
                 out.append({
                     "role": "assistant",
-                    "content": m.get("content") or "",
+                    "content": m.get("content") or None,
                     "tool_calls": [
                         {
                             "id": tc["id"],
@@ -467,19 +480,21 @@ def _to_provider_messages(messages: list[dict]) -> list[dict]:
                     ],
                 })
             else:
+                tool_calls_out = []
+                for tc in m["tool_calls"]:
+                    item = {
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": tc["arguments"],
+                        }
+                    }
+                    if tc.get("id"):
+                        item["id"] = tc["id"]
+                    tool_calls_out.append(item)
                 out.append({
                     "role": "assistant",
                     "content": m.get("content") or "",
-                    "tool_calls": [
-                        {
-                            "id": tc.get("id", ""),
-                            "function": {
-                                "name": tc["name"],
-                                "arguments": tc["arguments"],
-                            },
-                        }
-                        for tc in m["tool_calls"]
-                    ],
+                    "tool_calls": tool_calls_out,
                 })
         elif role == "tool":
             if kb.LLM_API == "openai":
@@ -568,7 +583,7 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
                 })
         else:
             # LLM 生成最终回答
-            answer = content
+            answer = _clean_answer(content)
             return {
                 "answer": answer,
                 "trace": trace,

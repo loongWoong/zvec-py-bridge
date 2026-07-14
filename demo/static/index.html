@@ -710,6 +710,24 @@ body::before {
   transition: all 0.15s var(--ease);
 }
 .render-toggle:hover { border-color: var(--text); color: var(--text); }
+.copy-btn {
+  margin-left: 8px;
+  padding: 4px 11px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.copy-btn:hover { border-color: var(--text); color: var(--text); }
+.copy-btn.copied { border-color: var(--green-fg); color: var(--green-fg); }
 .content-raw {
   white-space: pre-wrap;
   word-break: break-word;
@@ -806,7 +824,9 @@ body.raw-mode .content-raw { display: block; }
   color: var(--text-tertiary);
   font-size: 11px;
   margin-bottom: 4px;
+  display: flex; align-items: center; gap: 8px;
 }
+.doc-chunk-heading .copy-btn { margin-left: auto; }
 .chunk-highlight {
   background: var(--yellow-bg);
   border-left: 2px solid var(--yellow-fg);
@@ -1034,6 +1054,9 @@ body.raw-mode .content-raw { display: block; }
         <div class="card-head" id="answer-header">
           <svg class="ic" viewBox="0 0 24 24"><path d="M12 3l2.4 5.4L20 9.3l-4 4 1 5.7-5-3-5 3 1-5.7-4-4 5.6-.9z"/></svg>
           <span id="answer-header-label">AI 回答</span>
+          <button class="copy-btn" onclick="copyAnswer()">
+            <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制
+          </button>
         </div>
         <div class="card-body">
           <div class="answer-box" id="answer-box"></div>
@@ -1058,6 +1081,8 @@ let kbReady = false;
 let busy = false;
 let currentMode = 'rag';        // 'rag' | 'agent'
 let renderMode = 'markdown';    // 'markdown' | 'raw'
+let currentDoc = null;          // 当前查看的文档（用于一键复制）
+let lastAnswer = '';            // 最近一次回答文本（用于一键复制）
 
 // ====================================================================
 //  API helpers
@@ -1203,6 +1228,7 @@ function renderResults(docs) {
 //  Render: answer
 // ====================================================================
 function renderAnswer(answer) {
+  lastAnswer = answer;
   document.getElementById('answer-card').style.display = 'block';
   document.getElementById('answer-box').textContent = answer;
   reveal(document.getElementById('answer-card'));
@@ -1505,6 +1531,7 @@ async function viewDocument(docId, highlightChunkId) {
   modal.style.display = 'flex';
   try {
     const data = await api('GET', `/api/documents/${docId}`);
+    currentDoc = data;
     title.textContent = data.title;
     meta.textContent = `${data.document_id} · ${data.char_count} 字`;
     const toggleLabel = renderMode === 'markdown' ? 'Markdown' : '原文';
@@ -1533,6 +1560,9 @@ async function viewDocument(docId, highlightChunkId) {
     }
     // 文档内容
     html += `<div class="doc-section"><div class="doc-section-title">文档内容
+      <button class="copy-btn" onclick="copyDoc(this)">
+        <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制
+      </button>
       <button class="render-toggle" onclick="switchRenderMode()">${toggleLabel}</button>
     </div>`;
     html += renderContent(data.content);
@@ -1545,7 +1575,11 @@ async function viewDocument(docId, highlightChunkId) {
       for (const c of data.chunks) {
         const hl = (highlightChunkId === c.chunk_id) ? 'chunk-highlight' : '';
         html += `<div class="doc-chunk ${hl}" id="chunk-${c.chunk_id}">
-          <div class="doc-chunk-heading">${escapeHtml(c.heading || '无标题')} · #${c.ordinal}</div>
+          <div class="doc-chunk-heading">${escapeHtml(c.heading || '无标题')} · #${c.ordinal}
+            <button class="copy-btn" onclick="copyChunk('${escapeAttr(c.chunk_id)}', this)">
+              <svg class="ic ic-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制
+            </button>
+          </div>
           ${renderContent(c.content)}
         </div>`;
       }
@@ -1565,6 +1599,56 @@ async function viewDocument(docId, highlightChunkId) {
 
 function viewResult(docId, chunkId) {
   viewDocument(docId, chunkId);
+}
+
+// ====================================================================
+//  一键复制
+// ====================================================================
+async function copyText(text, btn) {
+  if (text == null) text = '';
+  text = String(text);
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      throw new Error('clipboard unavailable');
+    }
+  } catch (e) {
+    // 回退方案：临时 textarea + execCommand
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+  }
+  if (btn) {
+    const old = btn.innerHTML;
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>已复制';
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = old; }, 1500);
+  }
+  toast('已复制到剪贴板', 'success');
+}
+
+function copyDoc(btn) {
+  if (!currentDoc) return;
+  copyText(currentDoc.content, btn);
+}
+
+function copyChunk(chunkId, btn) {
+  if (!currentDoc || !currentDoc.chunks) return;
+  const c = currentDoc.chunks.find(x => x.chunk_id === chunkId);
+  if (!c) return;
+  copyText(c.content, btn);
+}
+
+function copyAnswer() {
+  if (!lastAnswer) return;
+  const btn = document.querySelector('#answer-header .copy-btn');
+  copyText(lastAnswer, btn);
 }
 
 // ====================================================================
