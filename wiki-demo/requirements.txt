@@ -1,0 +1,11 @@
+# Semantic Wiki Runtime 依赖
+# --- 图+文档存储（嵌入式 SurrealDB，无需单独起 server）---
+surrealdb==2.0.0
+
+# --- Web 框架 ---
+fastapi>=0.115
+uvicorn[standard]>=0.34
+python-multipart>=0.0.9          # FastAPI 表单/文件上传
+
+# --- HTTP 客户端（调用 zvec REST Bridge / Ollama / OpenAI 兼容端点）---
+requests>=2.28

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Wiki · LLM 知识图谱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --canvas: #FBFBFA;
+  --surface: #FFFFFF;
+  --surface-alt: #F7F6F3;
+  --surface-sunken: #F2F1ED;
+  --border: #EAEAEA;
+  --border-strong: #E2E0DC;
+  --text: #111111;
+  --text-secondary: #787774;
+  --text-tertiary: #A8A6A1;
+  --accent: #111111;
+  --red-bg: #FDEBEC;    --red-fg: #9F2F2D;
+  --blue-bg: #E1F3FE;   --blue-fg: #1F6C9F;
+  --green-bg: #EDF3EC;  --green-fg: #346538;
+  --yellow-bg: #FBF3DB; --yellow-fg: #956400;
+  --purple-bg: #F0EAFB; --purple-fg: #6B3FA0;
+  --font-sans: 'Geist', 'SF Pro Display', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-serif: 'Newsreader', 'Songti SC', 'Noto Serif SC', Georgia, serif;
+  --font-mono: 'Geist Mono', 'SF Mono', 'JetBrains Mono', 'Consolas', monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body {
+  font-family: var(--font-sans);
+  background: var(--canvas);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 14px;
+  font-weight: 400;
+  min-height: 100vh;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(58% 48% at 12% -4%, rgba(176,154,112,0.05), transparent 62%),
+    radial-gradient(48% 40% at 92% 6%, rgba(120,138,176,0.04), transparent 60%);
+  pointer-events: none; z-index: 0;
+}
+/* ── Layout ── */
+.app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px 80px; }
+/* ── Header ── */
+header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+.masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+.masthead h1 {
+  font-family: var(--font-serif);
+  font-size: 32px; font-weight: 500; letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.masthead h1 .accent { font-style: italic; color: var(--text-secondary); }
+.masthead .subtitle {
+  font-size: 13px; color: var(--text-secondary); margin-top: 6px;
+}
+.status-bar { display: flex; gap: 8px; flex-shrink: 0; }
+.status-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 500; font-family: var(--font-mono);
+  background: var(--surface-sunken); color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.status-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
+.status-chip.ok .dot { background: #34aa52; }
+.status-chip.ok { color: var(--green-fg); background: var(--green-bg); border-color: transparent; }
+.status-chip.err .dot { background: #c44; }
+.status-chip.err { color: var(--red-fg); background: var(--red-bg); border-color: transparent; }
+/* ── Tabs ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+.tab {
+  padding: 8px 16px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--text-secondary); transition: all 0.2s var(--ease);
+}
+.tab:hover { background: var(--surface-sunken); color: var(--text); }
+.tab.active { background: var(--surface); color: var(--text); border-color: var(--border-strong); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+/* ── Search bar ── */
+.search-bar {
+  display: flex; gap: 8px; margin-bottom: 24px;
+}
+.search-bar input {
+  flex: 1; padding: 10px 14px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  font-family: var(--font-sans); font-size: 14px; color: var(--text);
+  background: var(--surface); transition: border-color 0.2s var(--ease);
+}
+.search-bar input:focus { outline: none; border-color: var(--accent); }
+.search-bar button {
+  padding: 10px 20px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-family: var(--font-sans);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: opacity 0.2s var(--ease);
+}
+.search-bar button:hover { opacity: 0.85; }
+/* ── Views ── */
+.view { display: none; }
+.view.active { display: block; }
+/* ── Document cards ── */
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.doc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; cursor: pointer;
+  transition: all 0.25s var(--ease);
+}
+.doc-card:hover { border-color: var(--border-strong); box-shadow: 0 4px 16px rgba(0,0,0,0.04); transform: translateY(-1px); }
+.doc-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.doc-card .summary { font-family: var(--font-serif); font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
+.doc-card .meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 11px; font-family: var(--font-mono); font-weight: 500;
+  background: var(--surface-sunken); color: var(--text-secondary);
+}
+.tag.topic { background: var(--blue-bg); color: var(--blue-fg); }
+.tag.entity { background: var(--purple-bg); color: var(--purple-fg); }
+.tag.relation { background: var(--yellow-bg); color: var(--yellow-fg); }
+/* ── Document detail ── */
+.doc-detail { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; }
+.doc-detail h2 { font-family: var(--font-serif); font-size: 28px; font-weight: 500; margin-bottom: 8px; }
+.doc-detail .summary { font-family: var(--font-serif); font-size: 16px; color: var(--text-secondary); font-style: italic; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+.doc-detail .content { font-family: var(--font-serif); font-size: 15px; line-height: 1.75; color: var(--text); }
+.doc-detail .content h2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; margin: 24px 0 12px; }
+.doc-detail .relations { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border); }
+.doc-detail .relations h4 { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+.relation-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+.relation-item .arrow { color: var(--text-tertiary); }
+.relation-item a { color: var(--blue-fg); cursor: pointer; text-decoration: none; }
+.relation-item a:hover { text-decoration: underline; }
+.back-btn { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px; padding: 6px 12px; border-radius: var(--radius); background: var(--surface-sunken); color: var(--text-secondary); font-size: 13px; cursor: pointer; border: none; font-family: var(--font-sans); }
+.back-btn:hover { color: var(--text); }
+/* ── Search results ── */
+.search-results { display: flex; flex-direction: column; gap: 12px; }
+.search-result {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px; cursor: pointer;
+  transition: border-color 0.2s var(--ease);
+}
+.search-result:hover { border-color: var(--border-strong); }
+.search-result .title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.search-result .excerpt { font-family: var(--font-serif); font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
+.search-result .sources { display: flex; gap: 6px; align-items: center; }
+.source-badge { padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); font-weight: 500; }
+.source-badge.vector { background: var(--blue-bg); color: var(--blue-fg); }
+.source-badge.fts { background: var(--green-bg); color: var(--green-fg); }
+.source-badge.graph { background: var(--purple-bg); color: var(--purple-fg); }
+.source-badge.meta { background: var(--yellow-bg); color: var(--yellow-fg); }
+.score { font-size: 11px; font-family: var(--font-mono); color: var(--text-tertiary); }
+.routes-summary { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; font-family: var(--font-mono); }
+/* ── Graph view ── */
+.graph-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; min-height: 500px; }
+.graph-controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.graph-controls label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.graph-controls input[type=checkbox] { accent-color: var(--accent); }
+#graph-svg { width: 100%; height: 520px; }
+.graph-node { cursor: pointer; }
+.graph-node circle { transition: r 0.2s var(--ease); }
+.graph-node:hover circle { r: 10; }
+.graph-edge { stroke: var(--border-strong); stroke-width: 1; fill: none; }
+.graph-label { font-size: 11px; font-family: var(--font-sans); fill: var(--text-secondary); pointer-events: none; }
+/* ── Ask view ── */
+.ask-container { max-width: 800px; }
+.ask-input { display: flex; gap: 8px; margin-bottom: 24px; }
+.ask-input input { flex: 1; padding: 12px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 14px; font-family: var(--font-sans); }
+.ask-input input:focus { outline: none; border-color: var(--accent); }
+.ask-input button { padding: 12px 24px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 13px; font-weight: 500; cursor: pointer; }
+.ask-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+.sample-questions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.sample-q { padding: 6px 12px; border-radius: 20px; background: var(--surface-sunken); color: var(--text-secondary); font-size: 12px; cursor: pointer; border: 1px solid var(--border); }
+.sample-q:hover { color: var(--text); border-color: var(--border-strong); }
+.answer-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 16px; }
+.answer-box .answer { font-family: var(--font-serif); font-size: 15px; line-height: 1.75; white-space: pre-wrap; }
+.answer-box .meta-info { font-size: 12px; color: var(--text-tertiary); margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); }
+.trace-toggle { font-size: 12px; color: var(--blue-fg); cursor: pointer; margin-top: 12px; }
+.trace-toggle:hover { text-decoration: underline; }
+.trace { display: none; margin-top: 12px; }
+.trace.show { display: block; }
+.trace-item { background: var(--surface-sunken); border-radius: var(--radius); padding: 12px; margin-bottom: 8px; font-size: 12px; font-family: var(--font-mono); }
+.trace-item .tool-name { font-weight: 600; color: var(--purple-fg); }
+.trace-item .tool-args { color: var(--text-secondary); margin-left: 8px; }
+.trace-item pre { margin-top: 8px; font-size: 11px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; }
+/* ── Loading ── */
+.loading { text-align: center; padding: 40px; color: var(--text-tertiary); font-size: 14px; }
+.loading::after { content: '...'; animation: dots 1.5s infinite; }
+@keyframes dots { 0%,20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%,100% { content: '...'; } }
+/* ── Empty ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
+.empty .icon { font-size: 32px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ── Header ── -->
+  <header>
+    <div class="masthead">
+      <div>
+        <h1>Semantic <span class="accent">Wiki</span></h1>
+        <div class="subtitle">文档 · 图谱 · 本体 · 向量 — 四位一体的知识运行时</div>
+      </div>
+      <div class="status-bar" id="status-bar">
+        <span class="status-chip" id="status-surreal"><span class="dot"></span>SurrealDB</span>
+        <span class="status-chip" id="status-zvec"><span class="dot"></span>zvec</span>
+        <span class="status-chip" id="status-llm"><span class="dot"></span>LLM</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Tabs ── -->
+  <div class="tabs">
+    <button class="tab active" data-tab="library">文档库</button>
+    <button class="tab" data-tab="graph">知识图谱</button>
+    <button class="tab" data-tab="ask">问答</button>
+  </div>
+
+  <!-- ── Search bar (library + graph) ── -->
+  <div class="search-bar" id="search-bar">
+    <input type="text" id="search-input" placeholder="搜索知识库（四路融合：向量 + 全文 + 图 + 元数据）…">
+    <button onclick="doSearch()">搜索</button>
+  </div>
+
+  <!-- ── Library view ── -->
+  <div class="view active" id="view-library">
+    <div id="search-results-container" style="display:none;">
+      <div class="routes-summary" id="routes-summary"></div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+    <div id="doc-list">
+      <div class="loading">加载文档</div>
+    </div>
+    <div id="doc-detail" style="display:none;"></div>
+  </div>
+
+  <!-- ── Graph view ── -->
+  <div class="view" id="view-graph">
+    <div class="graph-container">
+      <div class="graph-controls">
+        <label><input type="checkbox" id="filter-doc" checked> 文档</label>
+        <label><input type="checkbox" id="filter-entity" checked> 实体</label>
+        <label><input type="checkbox" id="filter-tag" checked> 标签</label>
+        <label><input type="checkbox" id="filter-topic"> 主题</label>
+        <span style="flex:1"></span>
+        <span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono);" id="graph-info"></span>
+      </div>
+      <svg id="graph-svg"></svg>
+    </div>
+  </div>
+
+  <!-- ── Ask view ── -->
+  <div class="view" id="view-ask">
+    <div class="ask-container">
+      <div class="sample-questions" id="sample-questions"></div>
+      <div class="ask-input">
+        <input type="text" id="ask-input" placeholder="向 Wiki Agent 提问…" onkeydown="if(event.key==='Enter')doAsk()">
+        <button id="ask-btn" onclick="doAsk()">提问</button>
+      </div>
+      <div id="ask-result"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allDocs = [];
+let allEntities = [];
+
+// ── Tab switching ──
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('view-' + t.dataset.tab).classList.add('active');
+    // search bar only for library
+    document.getElementById('search-bar').style.display = t.dataset.tab === 'ask' ? 'none' : 'flex';
+    if (t.dataset.tab === 'graph') renderGraph();
+  });
+});
+
+// ── Health check ──
+async function checkHealth() {
+  try {
+    const r = await fetch(API + '/api/health');
+    const d = await r.json();
+    const setChip = (id, ok, label) => {
+      const el = document.getElementById(id);
+      el.className = 'status-chip ' + (ok ? 'ok' : 'err');
+      el.innerHTML = `<span class="dot"></span>${label}`;
+    };
+    setChip('status-surreal', d.surrealdb, 'SurrealDB');
+    setChip('status-zvec', d.zvec, 'zvec');
+    setChip('status-llm', d.llm, 'LLM');
+    document.getElementById('graph-info').textContent = d.stats
+      ? `${d.stats.documents} docs · ${d.stats.entities} entities · ${d.stats.tags} tags`
+      : '';
+  } catch (e) { console.error(e); }
+}
+
+// ── Load documents ──
+async function loadDocs() {
+  const el = document.getElementById('doc-list');
+  el.innerHTML = '<div class="loading">加载文档</div>';
+  try {
+    const r = await fetch(API + '/api/documents?limit=100');
+    const d = await r.json();
+    allDocs = d.documents || [];
+    renderDocList(allDocs);
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠</div>加载失败</div>';
+  }
+}
+
+function renderDocList(docs) {
+  const el = document.getElementById('doc-list');
+  if (!docs.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无文档</div>';
+    return;
+  }
+  el.innerHTML = '<div class="doc-grid">' + docs.map(doc => {
+    const tags = (doc.out_edges || []).filter(e => e.edge_type === 'has_tag')
+      .map(e => `<span class="tag">${e.node.split(':').pop()}</span>`).join('');
+    const topic = (doc.out_edges || []).filter(e => e.edge_type === 'belongs_to')
+      .map(e => `<span class="tag topic">${e.node.split(':').pop()}</span>`).join('');
+    return `<div class="doc-card" onclick="showDocDetail('${doc.id}')">
+      <h3>${esc(doc.title)}</h3>
+      <div class="summary">${esc(doc.summary || '')}</div>
+      <div class="meta">${topic}${tags}</div>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// ── Document detail ──
+async function showDocDetail(docId) {
+  document.getElementById('doc-list').style.display = 'none';
+  document.getElementById('search-results-container').style.display = 'none';
+  const el = document.getElementById('doc-detail');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="loading">加载文档</div>';
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}`);
+    const doc = await r.json();
+    // render markdown-ish content
+    const content = renderMarkdown(doc.content || '');
+    const outEdges = doc.out_edges || [];
+    const inEdges = doc.in_edges || [];
+    const rels = [...outEdges, ...inEdges];
+    let relHtml = '';
+    if (rels.length) {
+      relHtml = `<div class="relations"><h4>关系 (${rels.length})</h4>
+        ${rels.map(r => `<div class="relation-item">
+          <span class="tag relation">${r.edge_type}</span>
+          <span class="arrow">${r.direction === 'out' ? '→' : '←'}</span>
+          <a onclick="showDocDetail('${r.node}')">${r.node}</a>
+        </div>`).join('')}
+      </div>`;
+    }
+    el.innerHTML = `
+      <button class="back-btn" onclick="backToList()">← 返回列表</button>
+      <div class="doc-detail">
+        <h2>${esc(doc.title)}</h2>
+        ${doc.summary ? `<div class="summary">${esc(doc.summary)}</div>` : ''}
+        <div class="content">${content}</div>
+        <div style="margin-top:24px;display:flex;gap:8px;">
+          <button class="back-btn" onclick="exportDoc('${doc.id}')">导出 Markdown</button>
+          ${document.getElementById('status-llm').classList.contains('ok')
+            ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>` : ''}
+        </div>
+        ${relHtml}
+      </div>`;
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠</div>加载失败</div>';
+  }
+}
+
+function backToList() {
+  document.getElementById('doc-detail').style.display = 'none';
+  document.getElementById('doc-list').style.display = 'block';
+  document.getElementById('search-results-container').style.display = 'none';
+}
+
+function exportDoc(docId) {
+  window.open(API + `/api/documents/${encodeURIComponent(docId)}/export`, '_blank');
+}
+
+async function extractEntities(docId) {
+  if (!confirm('将使用 LLM 从文档中抽取实体和关系，确认？')) return;
+  try {
+    const r = await fetch(API + '/api/extract', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({document_id: docId})
+    });
+    if (!r.ok) { const e = await r.json(); alert('抽取失败: ' + (e.detail || '')); return; }
+    const d = await r.json();
+    alert(`抽取完成：${d.extracted.entities.length} 实体, ${d.extracted.relations.length} 关系`);
+    showDocDetail(docId);
+  } catch (e) { alert('抽取失败: ' + e); }
+}
+
+// ── Search ──
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  document.getElementById('doc-list').style.display = 'none';
+  document.getElementById('doc-detail').style.display = 'none';
+  const container = document.getElementById('search-results-container');
+  container.style.display = 'block';
+  const el = document.getElementById('search-results');
+  el.innerHTML = '<div class="loading">四路融合检索中</div>';
+  try {
+    const r = await fetch(API + `/api/search?q=${encodeURIComponent(q)}&topk=10`);
+    const d = await r.json();
+    const routes = d.routes || {};
+    document.getElementById('routes-summary').textContent =
+      `向量:${routes.vector||0} · 全文:${routes.fts||0} · 图:${routes.graph||0} · 元数据:${routes.meta||0}`;
+    if (!d.results.length) {
+      el.innerHTML = '<div class="empty"><div class="icon">🔍</div>未找到相关文档</div>';
+      return;
+    }
+    el.innerHTML = d.results.map(r => `
+      <div class="search-result" onclick="showDocDetail('${r.doc_id}')">
+        <div class="title">${esc(r.title)} <span class="score">${r.score}</span></div>
+        <div class="excerpt">${esc(r.excerpt || '')}</div>
+        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}</div>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><div class="icon">⚠</div>检索失败</div>';
+  }
+}
+
+// ── Graph ──
+async function renderGraph() {
+  const svg = document.getElementById('graph-svg');
+  svg.innerHTML = '';
+  try {
+    // gather all docs + entities + edges
+    const [docRes, entRes] = await Promise.all([
+      fetch(API + '/api/documents?limit=50').then(r => r.json()),
+      fetch(API + '/api/entities').then(r => r.json()),
+    ]);
+    allDocs = docRes.documents || [];
+    allEntities = entRes.entities || [];
+    buildGraph();
+  } catch (e) {
+    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载失败</text>';
+  }
+}
+
+function buildGraph() {
+  const showDoc = document.getElementById('filter-doc').checked;
+  const showEntity = document.getElementById('filter-entity').checked;
+  const showTag = document.getElementById('filter-tag').checked;
+  const showTopic = document.getElementById('filter-topic').checked;
+  const svg = document.getElementById('graph-svg');
+  const W = svg.clientWidth, H = 520;
+  const nodes = [], edges = [];
+  const nodeMap = {};
+
+  // Add doc nodes
+  if (showDoc) {
+    allDocs.forEach(d => {
+      const id = d.id;
+      nodeMap[id] = nodes.length;
+      nodes.push({id, label: d.title, type: 'document'});
+      // edges from doc
+      (d.out_edges || []).forEach(e => {
+        const target = e.node;
+        if (!nodeMap.hasOwnProperty(target)) {
+          nodeMap[target] = nodes.length;
+          const parts = target.split(':');
+          nodes.push({id: target, label: parts.pop(), type: parts[0]});
+        }
+        edges.push({from: nodeMap[id], to: nodeMap[target], type: e.edge_type});
+      });
+    });
+  }
+  // Add entity nodes
+  if (showEntity) {
+    allEntities.forEach(e => {
+      if (!nodeMap.hasOwnProperty(e.id)) {
+        nodeMap[e.id] = nodes.length;
+        nodes.push({id: e.id, label: e.name, type: 'entity'});
+      }
+    });
+  }
+  // Filter by type
+  const typeFilter = (n) => {
+    if (n.type === 'document') return showDoc;
+    if (n.type === 'entity') return showEntity;
+    if (n.type === 'tag') return showTag;
+    if (n.type === 'topic') return showTopic;
+    return true;
+  };
+  const visibleIdx = new Set();
+  nodes.forEach((n, i) => { if (typeFilter(n)) visibleIdx.add(i); });
+  const visNodes = nodes.filter((_, i) => visibleIdx.has(i));
+  const visEdges = edges.filter(e => visibleIdx.has(e.from) && visibleIdx.has(e.to));
+
+  // Simple circular layout
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.38;
+  visNodes.forEach((n, i) => {
+    const a = (i / visNodes.length) * 2 * Math.PI - Math.PI / 2;
+    n.x = cx + R * Math.cos(a);
+    n.y = cy + R * Math.sin(a);
+  });
+
+  // Colors by type
+  const colorMap = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538'};
+  let html = '';
+  // edges
+  visEdges.forEach(e => {
+    const a = visNodes.find(n => nodes[nodeMap[n.id]] === nodes[e.from]) || visNodes[e.from];
+    html += `<line class="graph-edge" x1="${a.x}" y1="${a.y}" x2="${visNodes[e.to].x}" y2="${visNodes[e.to].y}"/>`;
+  });
+  // Fix: remap indices
+  // Actually rebuild edges with visNodes indices
+  const visNodeMap = {};
+  visNodes.forEach((n, i) => { visNodeMap[n.id] = i; });
+  html = '';
+  visEdges.forEach(e => {
+    const fromNode = visNodes[visNodeMap[nodes[e.from].id] ?? e.from];
+    const toNode = visNodes[visNodeMap[nodes[e.to].id] ?? e.to];
+    if (fromNode && toNode) {
+      html += `<line class="graph-edge" x1="${fromNode.x}" y1="${fromNode.y}" x2="${toNode.x}" y2="${toNode.y}"/>`;
+    }
+  });
+  visNodes.forEach(n => {
+    const c = colorMap[n.type] || '#787774';
+    html += `<g class="graph-node" onclick="graphNodeClick('${n.id}')">
+      <circle cx="${n.x}" cy="${n.y}" r="6" fill="${c}" opacity="0.85"/>
+      <text class="graph-label" x="${n.x}" y="${n.y - 10}" text-anchor="middle">${esc(n.label.slice(0, 20))}</text>
+    </g>`;
+  });
+  svg.innerHTML = html;
+  document.getElementById('graph-info').textContent = `${visNodes.length} 节点 · ${visEdges.length} 边`;
+}
+
+function graphNodeClick(nodeId) {
+  const type = nodeId.split(':')[0];
+  if (type === 'document') {
+    document.querySelector('.tab[data-tab=library]').click();
+    showDocDetail(nodeId);
+  } else if (type === 'entity') {
+    // go to library and search by entity name
+    document.querySelector('.tab[data-tab=library]').click();
+    const name = nodeId.split(':').pop();
+    document.getElementById('search-input').value = name;
+    doSearch();
+  }
+}
+
+['filter-doc', 'filter-entity', 'filter-tag', 'filter-topic'].forEach(id => {
+  document.getElementById(id).addEventListener('change', buildGraph);
+});
+
+// ── Ask ──
+const SAMPLE_QS = [
+  'Transformer 的核心组件有哪些？',
+  'RAG 依赖哪些技术？',
+  '哪些文档提到了 Attention？',
+  'HNSW 索引的原理是什么？',
+  'Embedding 和向量数据库什么关系？',
+];
+function renderSampleQs() {
+  document.getElementById('sample-questions').innerHTML =
+    SAMPLE_QS.map(q => `<span class="sample-q" onclick="askThis('${esc(q)}')">${esc(q)}</span>`).join('');
+}
+function askThis(q) {
+  document.getElementById('ask-input').value = q;
+  doAsk();
+}
+async function doAsk() {
+  const q = document.getElementById('ask-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('ask-btn');
+  const el = document.getElementById('ask-result');
+  btn.disabled = true;
+  el.innerHTML = '<div class="loading">Agent 思考中</div>';
+  try {
+    const r = await fetch(API + '/api/ask', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q}),
+    });
+    if (!r.ok) { const e = await r.json(); el.innerHTML = `<div class="answer-box"><div class="answer" style="color:var(--red-fg)">⚠ ${esc(e.detail || '请求失败')}</div></div>`; return; }
+    const d = await r.json();
+    const traceHtml = d.trace && d.trace.length ? `
+      <div class="trace-toggle" onclick="document.getElementById('trace-box').classList.toggle('show')">▸ 工具调用轨迹 (${d.trace.length} 次, ${d.elapsed}s)</div>
+      <div class="trace" id="trace-box">
+        ${d.trace.map(t => `<div class="trace-item">
+          <span class="tool-name">${t.tool}</span><span class="tool-args">${esc(JSON.stringify(t.args))}</span>
+          <span style="float:right;color:var(--text-tertiary)">${t.duration}s</span>
+          <pre>${esc(JSON.stringify(t.result, null, 2).slice(0, 500))}</pre>
+        </div>`).join('')}
+      </div>` : '';
+    el.innerHTML = `<div class="answer-box">
+      <div class="answer">${esc(d.answer)}</div>
+      <div class="meta-info">迭代: ${d.iterations} · 耗时: ${d.elapsed}s · 工具调用: ${d.trace.length}</div>
+      ${traceHtml}
+    </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="answer-box"><div class="answer" style="color:var(--red-fg)">⚠ 请求失败: ${esc(String(e))}</div></div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Helpers ──
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function renderMarkdown(md) {
+  // very simple markdown: ## headings, paragraphs
+  return esc(md).replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>').replace(/$/, '</p>');
+}
+
+// ── Init ──
+checkHealth();
+loadDocs();
+renderSampleQs();
+document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# SurrealDB 嵌入式文件持久化
+wiki_data.db
+wiki_data.db*
+*.surrealdb
+
+# Python
+__pycache__/
+*.pyc
+
+# 上传文件
+uploads/
