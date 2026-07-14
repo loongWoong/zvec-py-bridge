@@ -595,10 +595,11 @@ body::before {
   padding: 16px 18px;
   font-size: 14px;
   line-height: 1.8;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
   color: var(--text);
 }
+.answer-box .content-markdown { white-space: normal; }
 .answer-box p { margin: 6px 0; }
 .answer-box code {
   font-family: var(--font-mono);
@@ -1230,7 +1231,8 @@ function renderResults(docs) {
 function renderAnswer(answer) {
   lastAnswer = answer;
   document.getElementById('answer-card').style.display = 'block';
-  document.getElementById('answer-box').textContent = answer;
+  // 默认按 Markdown 渲染（与文档查看一致），受全局「Markdown/原文」切换控制
+  document.getElementById('answer-box').innerHTML = renderContent(answer);
   reveal(document.getElementById('answer-card'));
 }
 
