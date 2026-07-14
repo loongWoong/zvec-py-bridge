@@ -403,6 +403,9 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <label><input type="checkbox" id="filter-entity" checked> 实体</label>
           <label><input type="checkbox" id="filter-tag" checked> 标签</label>
           <label><input type="checkbox" id="filter-topic" checked> 主题</label>
+          <label><input type="checkbox" id="filter-raw" checked> 原始资料</label>
+          <label><input type="checkbox" id="filter-archive" checked> 归档</label>
+          <label><input type="checkbox" id="filter-conversation" checked> 对话</label>
         </div>
         <select id="filter-edge">
           <option value="">所有边</option>
@@ -412,8 +415,15 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <option value="related">related</option>
           <option value="extends">extends</option>
           <option value="depends">depends</option>
+          <option value="implements">implements</option>
+          <option value="supersedes">supersedes</option>
+          <option value="contradicts">contradicts</option>
           <option value="child_of">child_of</option>
           <option value="entity_related">entity_related</option>
+          <option value="references">references</option>
+          <option value="updated_by">updated_by</option>
+          <option value="about">about</option>
+          <option value="previous_version">previous_version</option>
         </select>
         <label><input type="checkbox" id="show-edge-labels"> 边标签</label>
         <label><input type="checkbox" id="show-arrows" checked> 箭头</label>
@@ -642,12 +652,15 @@ let currentLayout = 'force';
 let focusNode = null;
 let graphSimulation = null;
 
-const TYPE_COLORS = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538'};
+const TYPE_COLORS = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538', raw: '#787774', archive: '#9F2F2D', conversation: '#956400', version: '#A8A6A1'};
 const EDGE_COLORS = {
   mentions: '#6B3FA0', has_tag: '#956400', belongs_to: '#346538',
   related: '#1F6C9F', extends: '#1F6C9F', depends: '#1F6C9F',
   implements: '#1F6C9F', child_of: '#956400', entity_related: '#6B3FA0',
   references: '#787774', contradicts: '#9F2F2D', supersedes: '#9F2F2D',
+  duplicates: '#787774', same_topic: '#346538', derived_from: '#1F6C9F',
+  archived_from: '#9F2F2D', updated_by: '#787774', about: '#956400',
+  previous_version: '#A8A6A1',
 };
 
 async function renderGraph() {
@@ -708,12 +721,19 @@ function renderLegend() {
 }
 
 function getFilteredData() {
-  const showDoc = document.getElementById('filter-doc').checked;
-  const showEntity = document.getElementById('filter-entity').checked;
-  const showTag = document.getElementById('filter-tag').checked;
-  const showTopic = document.getElementById('filter-topic').checked;
+  const typeFilters = {
+    document: 'filter-doc', entity: 'filter-entity',
+    tag: 'filter-tag', topic: 'filter-topic',
+    raw: 'filter-raw', archive: 'filter-archive',
+    conversation: 'filter-conversation', version: 'filter-conversation',
+  };
   const edgeFilter = document.getElementById('filter-edge').value;
-  const typeOk = (t) => ({document: showDoc, entity: showEntity, tag: showTag, topic: showTopic}[t] ?? true);
+  const typeOk = (t) => {
+    const filterId = typeFilters[t];
+    if (!filterId) return true; // 未知类型默认显示
+    const el = document.getElementById(filterId);
+    return el ? el.checked : true;
+  };
   const visNodes = graphData.nodes.filter(n => typeOk(n.type));
   const visIds = new Set(visNodes.map(n => n.id));
   const visEdges = graphData.edges.filter(e =>
@@ -834,11 +854,23 @@ function buildGraph() {
     link.classed('dimmed', false).classed('highlight', false);
   });
 
-  // 单击：跳转
-  node.on('click', (e, d) => { graphNodeClick(d.id); });
-  // 双击：聚焦
+  // 单击跳转 + 双击聚焦：用计时器区分，避免冲突
+  let clickTimer = null;
+  node.on('click', (e, d) => {
+    e.stopPropagation();
+    if (clickTimer) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+      return; // 双击的第一次 click，跳过
+    }
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      graphNodeClick(d.id);
+    }, 250);
+  });
   node.on('dblclick', (e, d) => {
     e.stopPropagation();
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
     focusNode = d.id;
     currentLayout = 'radial';
     document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('active', b.dataset.layout === 'radial'));
@@ -957,10 +989,10 @@ function radialLayout(nodes, edges, W, H) {
 
 function clusterLayout(nodes, edges, W, H) {
   if (graphSimulation) graphSimulation.stop();
-  // 按类型分 4 个扇区
-  const types = ['document', 'entity', 'tag', 'topic'];
+  // 按类型分扇区：动态收集所有出现过的类型
+  const types = [...new Set(nodes.map(n => n.type))];
   const cx = W / 2, cy = H / 2;
-  const sectorAngle = (2 * Math.PI) / types.length;
+  const sectorAngle = (2 * Math.PI) / Math.max(1, types.length);
   nodes.forEach(n => {
     const ti = types.indexOf(n.type);
     const baseAngle = ti * sectorAngle - Math.PI / 2;
@@ -999,15 +1031,14 @@ function graphNodeClick(nodeId) {
   if (type === 'document') {
     document.querySelector('.tab[data-tab=library]').click();
     showDocDetail(nodeId);
-  } else if (type === 'entity') {
+  } else if (type === 'entity' || type === 'tag' || type === 'topic') {
     document.querySelector('.tab[data-tab=library]').click();
     const name = nodeId.split(':').pop();
     document.getElementById('search-input').value = name;
     doSearch();
-  } else if (type === 'tag' || type === 'topic') {
-    document.querySelector('.tab[data-tab=library]').click();
-    document.getElementById('search-input').value = nodeId.split(':').pop();
-    doSearch();
+  } else if (type === 'raw' || type === 'archive' || type === 'conversation' || type === 'version') {
+    // 这些类型无文档详情页，跳转到元数据 Tab 展示
+    document.querySelector('.tab[data-tab=metadata]').click();
   }
 }
 
@@ -1023,7 +1054,9 @@ document.querySelectorAll('.layout-btn').forEach(btn => {
 });
 
 // 过滤器
-['filter-doc', 'filter-entity', 'filter-tag', 'filter-topic', 'filter-edge', 'show-edge-labels', 'show-arrows'].forEach(id => {
+['filter-doc', 'filter-entity', 'filter-tag', 'filter-topic',
+ 'filter-raw', 'filter-archive', 'filter-conversation',
+ 'filter-edge', 'show-edge-labels', 'show-arrows'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('change', buildGraph);
 });
@@ -1310,6 +1343,12 @@ function toggleGraphQuery() {
   el.style.display = isHidden ? 'block' : 'none';
   btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
 }
+// 将节点 ID 转为友好标签
+function nodeLabel(id) {
+  const n = graphData.nodes.find(x => x.id === id);
+  return n ? n.label : id.split(':').pop();
+}
+
 async function runShortestPath() {
   const src = document.getElementById('gq-path-src').value;
   const dst = document.getElementById('gq-path-dst').value;
@@ -1322,7 +1361,7 @@ async function runShortestPath() {
     if (d.length === -1 || (d.path && !d.path.length)) {
       el.innerHTML = '<span style="color:var(--red-fg)">未找到路径</span>';
     } else {
-      el.innerHTML = `路径长度: ${d.length}<br>路径: ${d.path.map(p => esc(p)).join(' → ')}`;
+      el.innerHTML = `路径长度: ${d.length}<br>路径: ${d.path.map(p => esc(nodeLabel(p))).join(' → ')}`;
     }
   } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
 }
@@ -1346,7 +1385,7 @@ async function runLineage() {
   try {
     const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/lineage`);
     const d = await r.json();
-    el.innerHTML = `上游: ${d.upstream_count} · 下游: ${d.downstream_count}<br>节点: ${(d.nodes || []).map(n => esc(n.label)).join(', ')}<br>边: ${(d.edges || []).map(e => esc(e.from.split(':').pop()) + ' →(' + e.type + ')→ ' + esc(e.to.split(':').pop())).join('<br>')}`;
+    el.innerHTML = `上游: ${d.upstream_count} · 下游: ${d.downstream_count}<br>节点: ${(d.nodes || []).map(n => esc(n.label)).join(', ')}<br>边: ${(d.edges || []).map(e => esc(nodeLabel(e.from)) + ' →(' + e.type + ')→ ' + esc(nodeLabel(e.to))).join('<br>')}`;
   } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
 }
 async function runCentral() {
