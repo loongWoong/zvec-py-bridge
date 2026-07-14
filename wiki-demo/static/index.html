@@ -231,6 +231,32 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 /* ── Compile box ── */
 .compile-box { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
 .compile-box h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+/* ── Upload zone ── */
+.upload-zone { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 12px; transition: border-color 0.2s var(--ease); }
+.upload-zone.dragover { border-color: var(--blue-fg); background: var(--blue-bg); }
+.upload-buttons { display: flex; gap: 12px; justify-content: center; margin-bottom: 8px; }
+.upload-btn { display: inline-block; padding: 8px 16px; background: var(--surface-sunken); border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s var(--ease); color: var(--text); }
+.upload-btn:hover { background: var(--surface); border-color: var(--text-secondary); }
+.upload-btn-small { padding: 2px 8px; font-size: 11px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--text-secondary); }
+.upload-btn-small:hover { color: var(--red-fg); border-color: var(--red-fg); }
+.upload-hint { font-size: 12px; color: var(--text-tertiary); }
+/* ── File list ── */
+.file-list-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+.file-list { max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.file-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); }
+.file-item:last-child { border-bottom: none; }
+.file-item .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .file-size { color: var(--text-tertiary); margin-left: 8px; flex-shrink: 0; }
+.file-item .file-remove { margin-left: 8px; color: var(--text-tertiary); cursor: pointer; flex-shrink: 0; }
+.file-item .file-remove:hover { color: var(--red-fg); }
+.file-item .file-status { margin-left: 8px; font-size: 11px; flex-shrink: 0; }
+.file-item .file-status.ok { color: var(--green-fg); }
+.file-item .file-status.error { color: var(--red-fg); }
+.file-item .file-status.pending { color: var(--text-tertiary); }
+/* ── Progress bar ── */
+.progress-bar { width: 100%; height: 6px; background: var(--surface-sunken); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.progress-fill { height: 100%; background: var(--blue-fg); border-radius: 3px; transition: width 0.3s var(--ease); width: 0%; }
+.progress-text { font-size: 12px; color: var(--text-secondary); font-family: var(--font-mono); }
 /* ── Version timeline ── */
 .version-timeline { margin-top: 16px; padding: 12px 16px; background: var(--surface-sunken); border-radius: var(--radius); }
 .version-timeline h4 { font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary); }
@@ -286,11 +312,42 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     <div id="compile-container" style="display:none;">
       <div class="compile-box">
         <h3>编译文档（raw → Wiki）</h3>
-        <input type="text" id="compile-title" placeholder="建议标题（可选）" style="width:100%;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;">
+
+        <!-- 上传区 -->
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-buttons">
+            <label class="upload-btn">
+              选择文件
+              <input type="file" id="file-input" multiple accept=".md,.txt,.markdown" style="display:none;" onchange="handleFileSelect(event)">
+            </label>
+            <label class="upload-btn">
+              选择文件夹
+              <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none;" onchange="handleFolderSelect(event)">
+            </label>
+          </div>
+          <div class="upload-hint">支持 .md / .txt 文件，可多选或选择整个文件夹</div>
+        </div>
+
+        <!-- 已选文件列表 -->
+        <div id="file-list-container" style="display:none;margin-bottom:12px;">
+          <div class="file-list-header">
+            <span>已选文件 (<span id="file-count">0</span>)</span>
+            <button class="upload-btn-small" onclick="clearFileList()">清空</button>
+          </div>
+          <div id="file-list" class="file-list"></div>
+        </div>
+
+        <!-- 批量编译进度 -->
+        <div id="batch-progress" style="display:none;margin-bottom:12px;">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-text" id="progress-text"></div>
+        </div>
+
         <input type="text" id="compile-topic" placeholder="主题（可选，如 machine_learning）" style="width:100%;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;">
-        <textarea id="compile-content" placeholder="粘贴原始资料…" style="width:100%;min-height:200px;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;resize:vertical;"></textarea>
-        <div style="display:flex;gap:8px;">
+        <textarea id="compile-content" placeholder="或直接粘贴原始资料…" style="width:100%;min-height:120px;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="back-btn" onclick="doCompile()">编译并创建</button>
+          <button class="back-btn" id="batch-compile-btn" onclick="compileBatch()" style="display:none;">批量编译</button>
           <button class="back-btn" onclick="toggleCompile()">取消</button>
         </div>
         <div id="compile-result" style="margin-top:12px;"></div>
@@ -318,19 +375,19 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label style="font-weight:500;display:block;margin-bottom:4px;">最短路径</label>
-            <input type="text" id="gq-path-src" placeholder="源节点 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
-            <input type="text" id="gq-path-dst" placeholder="目标节点 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <select id="gq-path-src" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
+            <select id="gq-path-dst" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
             <button class="layout-btn" onclick="runShortestPath()">查询</button>
           </div>
           <div>
             <label style="font-weight:500;display:block;margin-bottom:4px;">共同邻居</label>
-            <input type="text" id="gq-common-a" placeholder="节点 A" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
-            <input type="text" id="gq-common-b" placeholder="节点 B" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <select id="gq-common-a" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
+            <select id="gq-common-b" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
             <button class="layout-btn" onclick="runCommonNeighbors()">查询</button>
           </div>
           <div>
             <label style="font-weight:500;display:block;margin-bottom:4px;">知识血缘</label>
-            <input type="text" id="gq-lineage" placeholder="文档 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <select id="gq-lineage" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
             <button class="layout-btn" onclick="runLineage()">查询</button>
           </div>
           <div>
@@ -609,9 +666,38 @@ async function renderGraph() {
     graphData.nodes.forEach(n => { n.degree = degreeMap[n.id] || 0; });
     renderLegend();
     buildGraph();
+    populateNodeSelects();
   } catch (e) {
     svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载失败</text>';
   }
+}
+
+// 填充图查询下拉框：从 graphData.nodes 生成选项
+function populateNodeSelects() {
+  // 按类型分组排序：document 优先，再按 label 排序
+  const typeOrder = ['document', 'entity', 'tag', 'topic', 'raw', 'archive'];
+  const sorted = [...graphData.nodes].sort((a, b) => {
+    const ta = typeOrder.indexOf(a.type) >= 0 ? typeOrder.indexOf(a.type) : 99;
+    const tb = typeOrder.indexOf(b.type) >= 0 ? typeOrder.indexOf(b.type) : 99;
+    if (ta !== tb) return ta - tb;
+    return a.label.localeCompare(b.label);
+  });
+  const options = sorted.map(n =>
+    `<option value="${esc(n.id)}">${esc(n.label)} [${n.type}]</option>`
+  ).join('');
+  const placeholder = '<option value="">— 选择节点 —</option>';
+
+  // 全节点下拉框（最短路径、共同邻居）
+  ['gq-path-src', 'gq-path-dst', 'gq-common-a', 'gq-common-b'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = placeholder + options; }
+  });
+
+  // 知识血缘只列出 document 类型节点
+  const docOptions = sorted.filter(n => n.type === 'document')
+    .map(n => `<option value="${esc(n.id)}">${esc(n.label)}</option>`).join('');
+  const lineageEl = document.getElementById('gq-lineage');
+  if (lineageEl) { lineageEl.innerHTML = placeholder + docOptions; }
 }
 
 function renderLegend() {
@@ -792,11 +878,17 @@ function applyLayout(nodes, edges, W, H) {
 
 function forceLayout(nodes, edges, W, H) {
   if (graphSimulation) graphSimulation.stop();
+  const nodeCount = nodes.length;
+  // 斥力强度随节点数自适应：节点越多斥力越强，确保散开
+  const chargeStrength = -Math.max(200, nodeCount * 8);
+  // 链接距离随节点数自适应
+  const linkDistance = Math.max(70, Math.min(160, nodeCount * 2.5));
   graphSimulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(edges).id(d => d.id).distance(60).strength(0.3))
-    .force('charge', d3.forceManyBody().strength(-120))
-    .force('center', d3.forceCenter(W / 2, H / 2))
-    .force('collide', d3.forceCollide().radius(d => Math.max(4, 4 + d.degree * 0.8) + 4));
+    .alphaDecay(0.02)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(linkDistance).strength(0.15))
+    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(400))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.04))
+    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 8).strength(0.8));
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
 }
 
@@ -809,16 +901,17 @@ function hierarchyLayout(nodes, edges, W, H) {
   const maxLevel = Math.max(...Object.values(levels));
   nodes.forEach(n => {
     const lvl = levels[n.id] || 0;
-    n.x = W / 2 + (Math.random() - 0.5) * 200;
+    n.x = W / 2 + (Math.random() - 0.5) * 300;
     n.y = 40 + (lvl / Math.max(1, maxLevel)) * (H - 80);
   });
-  // 轻量力导向微调
+  // 力导向微调，增强斥力防聚聚
   graphSimulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(edges).id(d => d.id).distance(40).strength(0.1))
-    .force('charge', d3.forceManyBody().strength(-30))
-    .force('x', d3.forceX(d => W/2 + (levels[d.id]||0) * 0).strength(0.02))
-    .force('y', d3.forceY(d => 40 + (levels[d.id]||0) / Math.max(1,maxLevel) * (H-80)).strength(0.15))
-    .force('collide', d3.forceCollide().radius(12));
+    .alphaDecay(0.02)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(60).strength(0.08))
+    .force('charge', d3.forceManyBody().strength(-150).distanceMax(350))
+    .force('x', d3.forceX(d => W/2).strength(0.03))
+    .force('y', d3.forceY(d => 40 + (levels[d.id]||0) / Math.max(1,maxLevel) * (H-80)).strength(0.2))
+    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
 }
 
@@ -854,10 +947,11 @@ function radialLayout(nodes, edges, W, H) {
     ringIdx[d]++;
   });
   graphSimulation = d3.forceSimulation(nodes)
+    .alphaDecay(0.02)
     .force('link', d3.forceLink(edges).id(d => d.id).distance(50).strength(0.2))
-    .force('charge', d3.forceManyBody().strength(-50))
+    .force('charge', d3.forceManyBody().strength(-120).distanceMax(300))
     .force('r', d3.forceRadial(d => d._dist === 0 ? 0 : (d._dist / Math.max(1,maxDist)) * Math.min(W,H)*0.4, cx, cy).strength(0.5))
-    .force('collide', d3.forceCollide().radius(10));
+    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
 }
 
@@ -878,11 +972,12 @@ function clusterLayout(nodes, edges, W, H) {
     n.y = cy + R * Math.sin(n._clusterAngle);
   });
   graphSimulation = d3.forceSimulation(nodes)
+    .alphaDecay(0.02)
     .force('link', d3.forceLink(edges).id(d => d.id).distance(50).strength(0.15))
-    .force('charge', d3.forceManyBody().strength(-60))
+    .force('charge', d3.forceManyBody().strength(-100).distanceMax(300))
     .force('x', d3.forceX(d => cx + d._clusterR * Math.cos(d._clusterAngle)).strength(0.15))
     .force('y', d3.forceY(d => cy + d._clusterR * Math.sin(d._clusterAngle)).strength(0.15))
-    .force('collide', d3.forceCollide().radius(10));
+    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
 }
 
@@ -985,25 +1080,197 @@ async function doAsk() {
 }
 
 // ── Compile document ──
+let selectedFiles = []; // [{file, name, size, content, status}]
+
 function toggleCompile() {
   const el = document.getElementById('compile-container');
   const docList = document.getElementById('doc-list');
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? 'block' : 'none';
   docList.style.display = isHidden ? 'none' : 'block';
-  if (!isHidden) document.getElementById('compile-result').innerHTML = '';
+  if (!isHidden) {
+    document.getElementById('compile-result').innerHTML = '';
+    selectedFiles = [];
+    renderFileList();
+  }
 }
+
+// 处理文件选择（多文件）
+function handleFileSelect(event) {
+  const files = event.target.files;
+  if (!files || !files.length) return;
+  const validExts = ['.md', '.txt', '.markdown'];
+  const newFiles = [];
+  for (const f of files) {
+    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (validExts.includes(ext) || f.type === 'text/plain' || f.type === 'text/markdown') {
+      newFiles.push({file: f, name: f.name, size: f.size, content: null, status: 'pending'});
+    }
+  }
+  if (newFiles.length === 0) {
+    alert('未找到支持的文件（.md / .txt）');
+    return;
+  }
+  selectedFiles.push(...newFiles);
+  renderFileList();
+  event.target.value = ''; // 允许重复选择同一文件
+}
+
+// 处理文件夹选择（webkitdirectory）
+function handleFolderSelect(event) {
+  const files = event.target.files;
+  if (!files || !files.length) return;
+  const validExts = ['.md', '.txt', '.markdown'];
+  const newFiles = [];
+  for (const f of files) {
+    const ext = '.' + (f.name.split('.').pop() || '').toLowerCase();
+    if (validExts.includes(ext) || f.type === 'text/plain' || f.type === 'text/markdown') {
+      // webkitRelativePath 包含文件夹路径
+      const relPath = f.webkitRelativePath || f.name;
+      newFiles.push({file: f, name: relPath, size: f.size, content: null, status: 'pending'});
+    }
+  }
+  if (newFiles.length === 0) {
+    alert('文件夹中未找到支持的文件（.md / .txt）');
+    return;
+  }
+  selectedFiles.push(...newFiles);
+  renderFileList();
+  event.target.value = '';
+}
+
+// 渲染文件列表
+function renderFileList() {
+  const container = document.getElementById('file-list-container');
+  const listEl = document.getElementById('file-list');
+  const countEl = document.getElementById('file-count');
+  const batchBtn = document.getElementById('batch-compile-btn');
+
+  if (!selectedFiles.length) {
+    container.style.display = 'none';
+    batchBtn.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  batchBtn.style.display = 'inline-block';
+  countEl.textContent = selectedFiles.length;
+
+  listEl.innerHTML = selectedFiles.map((f, i) => {
+    const sizeStr = f.size < 1024 ? f.size + 'B' : (f.size < 1048576 ? (f.size/1024).toFixed(1)+'KB' : (f.size/1048576).toFixed(1)+'MB');
+    const statusHtml = f.status === 'ok' ? '<span class="file-status ok">✓</span>'
+      : f.status === 'error' ? '<span class="file-status error">✗</span>'
+      : f.status === 'compiling' ? '<span class="file-status pending">⟳</span>'
+      : '';
+    return `<div class="file-item" id="file-item-${i}">
+      <span class="file-name">${esc(f.name)}</span>
+      <span class="file-size">${sizeStr}</span>
+      ${statusHtml}
+      <span class="file-remove" onclick="removeFile(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+// 删除单个文件
+function removeFile(index) {
+  selectedFiles.splice(index, 1);
+  renderFileList();
+}
+
+// 清空文件列表
+function clearFileList() {
+  selectedFiles = [];
+  renderFileList();
+}
+
+// 批量编译：逐个文件上传到 /api/compile-batch
+async function compileBatch() {
+  if (!selectedFiles.length) return;
+  const topic = document.getElementById('compile-topic').value.trim() || null;
+  const progressEl = document.getElementById('batch-progress');
+  const fillEl = document.getElementById('progress-fill');
+  const textEl = document.getElementById('progress-text');
+  const batchBtn = document.getElementById('batch-compile-btn');
+  const resultEl = document.getElementById('compile-result');
+
+  progressEl.style.display = 'block';
+  batchBtn.disabled = true;
+  resultEl.innerHTML = '';
+
+  const total = selectedFiles.length;
+  let succeeded = 0;
+
+  for (let i = 0; i < total; i++) {
+    const f = selectedFiles[i];
+    f.status = 'compiling';
+    renderFileList();
+
+    const pct = Math.round((i / total) * 100);
+    fillEl.style.width = pct + '%';
+    textEl.textContent = `编译中 ${i+1}/${total}: ${f.name}`;
+
+    try {
+      const formData = new FormData();
+      formData.append('files', f.file, f.name.split('/').pop()); // 用纯文件名
+      if (topic) formData.append('topic', topic);
+
+      const r = await fetch(API + '/api/compile-batch', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!r.ok) {
+        const e = await r.json();
+        f.status = 'error';
+        f.reason = e.detail || '编译失败';
+      } else {
+        const d = await r.json();
+        // compile-batch 返回 results 数组
+        const item = d.results && d.results[0];
+        if (item && item.status === 'ok') {
+          f.status = 'ok';
+          f.title = item.title;
+          succeeded++;
+        } else {
+          f.status = 'error';
+          f.reason = item ? item.reason : '未知错误';
+        }
+      }
+    } catch (e) {
+      f.status = 'error';
+      f.reason = String(e);
+    }
+    renderFileList();
+  }
+
+  // 完成
+  fillEl.style.width = '100%';
+  textEl.textContent = `完成: ${succeeded}/${total} 成功`;
+  batchBtn.disabled = false;
+
+  const failed = total - succeeded;
+  let summaryHtml = `<div style="color:var(--green-fg)">✓ 成功编译 ${succeeded} 篇文档</div>`;
+  if (failed > 0) {
+    summaryHtml += `<div style="color:var(--red-fg)">⚠ ${failed} 篇失败</div>`;
+    const errors = selectedFiles.filter(f => f.status === 'error');
+    summaryHtml += '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">'
+      + errors.map(f => `${esc(f.name)}: ${esc(f.reason || '')}`).join('<br>') + '</div>';
+  }
+  resultEl.innerHTML = summaryHtml;
+
+  if (succeeded > 0) {
+    setTimeout(() => { toggleCompile(); loadDocs(); }, 2500);
+  }
+}
+
 async function doCompile() {
   const content = document.getElementById('compile-content').value.trim();
   if (!content) { alert('请输入原始资料'); return; }
-  const titleHint = document.getElementById('compile-title').value.trim() || null;
   const topic = document.getElementById('compile-topic').value.trim() || null;
   const el = document.getElementById('compile-result');
   el.innerHTML = '<div class="loading">LLM 编译中</div>';
   try {
     const r = await fetch(API + '/api/compile', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({raw_content: content, topic: topic, title_hint: titleHint}),
+      body: JSON.stringify({raw_content: content, topic: topic, title_hint: null}),
     });
     if (!r.ok) { const e = await r.json(); el.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(e.detail || '编译失败')}</div>`; return; }
     const d = await r.json();
@@ -1044,9 +1311,9 @@ function toggleGraphQuery() {
   btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
 }
 async function runShortestPath() {
-  const src = document.getElementById('gq-path-src').value.trim();
-  const dst = document.getElementById('gq-path-dst').value.trim();
-  if (!src || !dst) { alert('请输入源节点和目标节点'); return; }
+  const src = document.getElementById('gq-path-src').value;
+  const dst = document.getElementById('gq-path-dst').value;
+  if (!src || !dst) { alert('请选择源节点和目标节点'); return; }
   const el = document.getElementById('gq-result');
   el.innerHTML = '<div class="loading">查询中</div>';
   try {
@@ -1060,9 +1327,9 @@ async function runShortestPath() {
   } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
 }
 async function runCommonNeighbors() {
-  const a = document.getElementById('gq-common-a').value.trim();
-  const b = document.getElementById('gq-common-b').value.trim();
-  if (!a || !b) { alert('请输入两个节点'); return; }
+  const a = document.getElementById('gq-common-a').value;
+  const b = document.getElementById('gq-common-b').value;
+  if (!a || !b) { alert('请选择两个节点'); return; }
   const el = document.getElementById('gq-result');
   el.innerHTML = '<div class="loading">查询中</div>';
   try {
@@ -1072,8 +1339,8 @@ async function runCommonNeighbors() {
   } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
 }
 async function runLineage() {
-  const docId = document.getElementById('gq-lineage').value.trim();
-  if (!docId) { alert('请输入文档 ID'); return; }
+  const docId = document.getElementById('gq-lineage').value;
+  if (!docId) { alert('请选择文档'); return; }
   const el = document.getElementById('gq-result');
   el.innerHTML = '<div class="loading">查询中</div>';
   try {

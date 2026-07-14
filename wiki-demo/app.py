@@ -25,7 +25,7 @@ import os
 import sys
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -559,6 +559,67 @@ def compile_doc(req: CompileRequest):
         return {"compiled": compiled, "document": doc}
     except llm.LLMError as e:
         raise HTTPException(502, str(e))
+
+
+@app.post("/api/compile-batch")
+async def compile_batch(
+    files: list[UploadFile] = File(...),
+    topic: str | None = Form(default=None),
+):
+    """批量编译：上传多个文件（.md/.txt），逐个 LLM 编译为 Wiki 文档。
+
+    支持文件上传和文件夹遍历上传。文件名作为 title_hint 传入。
+    返回每个文件的编译结果（成功/失败分别记录）。
+    """
+    if not _state["llm"]:
+        raise HTTPException(503, "LLM 服务不可达，无法编译文档")
+
+    results: list[dict] = []
+    for f in files:
+        filename = f.filename or "unknown"
+        # 跳过非文本文件
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in (".md", ".txt", ".markdown", ""):
+            results.append({"file": filename, "status": "skipped", "reason": f"不支持的文件类型: {ext}"})
+            continue
+        try:
+            raw_bytes = await f.read()
+            raw_content = raw_bytes.decode("utf-8", errors="replace").strip()
+            if not raw_content:
+                results.append({"file": filename, "status": "skipped", "reason": "文件为空"})
+                continue
+            # 用文件名（去扩展名）作为 title_hint
+            title_hint = os.path.splitext(filename)[0]
+            compiled = llm.compile_document(raw_content, topic, title_hint)
+            doc = wr.create_document(
+                title=compiled.get("title", title_hint),
+                content=compiled.get("content", ""),
+                summary=compiled.get("summary"),
+                topic_id=topic,
+                tags=compiled.get("suggested_tags"),
+                entities=compiled.get("entities"),
+                relations=compiled.get("suggested_relations"),
+            )
+            results.append({
+                "file": filename,
+                "status": "ok",
+                "title": doc.get("title", ""),
+                "doc_id": doc.get("id", ""),
+            })
+        except llm.LLMError as e:
+            results.append({"file": filename, "status": "error", "reason": str(e)})
+        except Exception as e:
+            results.append({"file": filename, "status": "error", "reason": str(e)})
+        finally:
+            await f.close()
+
+    succeeded = sum(1 for r in results if r["status"] == "ok")
+    return {
+        "total": len(results),
+        "succeeded": succeeded,
+        "failed": len(results) - succeeded,
+        "results": results,
+    }
 
 
 @app.post("/api/extract")
