@@ -13,7 +13,7 @@ import requests
 # ====================================================================== #
 ZVEC_URL = os.environ.get("ZVEC_URL", "http://localhost:8666")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:4b")
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:0.6b")
 OCR_MODEL = os.environ.get("OCR_MODEL", "glm-ocr")    # OCR 识别用（依赖 Ollama 原生接口）
 OCR_URL = os.environ.get("OCR_URL", OLLAMA_URL)        # OCR 服务地址（默认复用 Ollama）
 
