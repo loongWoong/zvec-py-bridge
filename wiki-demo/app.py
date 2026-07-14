@@ -272,7 +272,27 @@ def list_versions(doc_id: str):
 
 # ====================================================================== #
 #  图操作
+#  注意：固定路径路由（full/stats/central）必须定义在 {node_id} 通配路由之前，
+#  否则 "full"/"stats"/"central" 会被当作 node_id 匹配。
 # ====================================================================== #
+@app.get("/api/graph/full")
+def graph_full():
+    """全图数据（所有节点+边），供前端 D3 渲染。"""
+    return wr.graph_full()
+
+
+@app.get("/api/graph/stats")
+def graph_stats():
+    """全局图统计：节点数/边数/各边类型计数/平均度/密度。"""
+    return wr.graph_stats()
+
+
+@app.get("/api/graph/central")
+def top_central(limit: int = 10):
+    """度中心性排序：度最高的 hub 节点。"""
+    return {"nodes": wr.top_central_nodes(limit)}
+
+
 @app.get("/api/graph/{node_id}")
 def graph_neighbors(node_id: str, direction: str = "both", edge_type: str | None = None):
     """图邻接遍历。"""
@@ -285,10 +305,40 @@ def graph_subtree(node_id: str, depth: int = 2):
     return wr.graph_subtree(node_id, depth)
 
 
+@app.get("/api/graph/{node_id}/shortest-path")
+def shortest_path(node_id: str, target: str, max_depth: int = 6):
+    """BFS 最短路径：两节点间的最短关系路径。"""
+    return wr.shortest_path(node_id, target, max_depth)
+
+
+@app.get("/api/graph/{node_id}/common")
+def common_neighbors(node_id: str, other: str):
+    """共同邻居：两节点的共同邻居。"""
+    return wr.common_neighbors(node_id, other)
+
+
+@app.get("/api/graph/{node_id}/degree")
+def node_degree(node_id: str):
+    """度中心性：节点的入度/出度/总度。"""
+    return wr.node_degree(node_id)
+
+
+@app.get("/api/graph/{node_id}/multi-hop")
+def multi_hop(node_id: str, depth: int = 3):
+    """多跳邻接：BFS N 跳，按层级分组。"""
+    return wr.multi_hop_neighbors(node_id, depth)
+
+
 @app.get("/api/documents/{doc_id}/related")
 def related_articles(doc_id: str):
     """获取与文档相关的文章。"""
     return {"related": wr.related_articles(doc_id)}
+
+
+@app.get("/api/documents/{doc_id}/lineage")
+def knowledge_lineage(doc_id: str, max_depth: int = 3):
+    """知识血缘：文档的上下游知识链。"""
+    return wr.knowledge_lineage(doc_id, max_depth)
 
 
 # ====================================================================== #
@@ -316,6 +366,12 @@ def entity_lookup(name: str):
     if not result:
         raise HTTPException(404, f"实体 {name} 不存在")
     return result
+
+
+@app.get("/api/entities/{name}/co-occurrence")
+def entity_co_occurrence(name: str):
+    """共现分析：与某实体共同出现在文档中的其他实体。"""
+    return wr.entity_co_occurrence(name)
 
 
 # ====================================================================== #

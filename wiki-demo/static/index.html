@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
 :root {
   --canvas: #FBFBFA;
@@ -160,16 +161,35 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .score { font-size: 11px; font-family: var(--font-mono); color: var(--text-tertiary); }
 .routes-summary { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; font-family: var(--font-mono); }
 /* ── Graph view ── */
-.graph-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; min-height: 500px; }
-.graph-controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.graph-controls label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.graph-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
+.graph-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.graph-toolbar .layout-group { display: flex; gap: 2px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius); }
+.layout-btn { padding: 5px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
+.layout-btn:hover { color: var(--text); }
+.layout-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.graph-controls { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+.graph-controls .filter-group { display: flex; gap: 8px; align-items: center; }
+.graph-controls label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer; }
 .graph-controls input[type=checkbox] { accent-color: var(--accent); }
-#graph-svg { width: 100%; height: 520px; }
-.graph-node { cursor: pointer; }
-.graph-node circle { transition: r 0.2s var(--ease); }
-.graph-node:hover circle { r: 10; }
-.graph-edge { stroke: var(--border-strong); stroke-width: 1; fill: none; }
-.graph-label { font-size: 11px; font-family: var(--font-sans); fill: var(--text-secondary); pointer-events: none; }
+.graph-controls select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
+.graph-stats { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); margin-left: auto; }
+#graph-svg { width: 100%; height: 560px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); cursor: grab; }
+#graph-svg:active { cursor: grabbing; }
+.graph-tooltip { position: absolute; background: var(--text); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.15s var(--ease); max-width: 280px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.graph-tooltip.show { opacity: 1; }
+.graph-tooltip .tt-label { font-weight: 600; margin-bottom: 4px; }
+.graph-tooltip .tt-meta { font-size: 11px; opacity: 0.8; }
+.graph-legend { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; color: var(--text-secondary); }
+.graph-legend .legend-item { display: flex; align-items: center; gap: 4px; }
+.graph-legend .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.graph-node circle { cursor: pointer; transition: stroke-width 0.15s var(--ease); }
+.graph-node:hover circle { stroke-width: 2.5; }
+.graph-node.dimmed { opacity: 0.15; }
+.graph-link { transition: opacity 0.15s var(--ease); }
+.graph-link.dimmed { opacity: 0.05; }
+.graph-link.highlight { opacity: 1; stroke-width: 2.5; }
+.graph-label { font-size: 10px; font-family: var(--font-sans); fill: var(--text-secondary); pointer-events: none; font-weight: 500; }
+.graph-edge-label { font-size: 8px; font-family: var(--font-mono); fill: var(--text-tertiary); pointer-events: none; }
 /* ── Ask view ── */
 .ask-container { max-width: 800px; }
 .ask-input { display: flex; gap: 8px; margin-bottom: 24px; }
@@ -245,16 +265,40 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
   <!-- ── Graph view ── -->
   <div class="view" id="view-graph">
     <div class="graph-container">
+      <div class="graph-toolbar">
+        <div class="layout-group">
+          <button class="layout-btn active" data-layout="force">力导向</button>
+          <button class="layout-btn" data-layout="hierarchy">层次</button>
+          <button class="layout-btn" data-layout="radial">环形聚焦</button>
+          <button class="layout-btn" data-layout="cluster">类型聚类</button>
+        </div>
+      </div>
       <div class="graph-controls">
-        <label><input type="checkbox" id="filter-doc" checked> 文档</label>
-        <label><input type="checkbox" id="filter-entity" checked> 实体</label>
-        <label><input type="checkbox" id="filter-tag" checked> 标签</label>
-        <label><input type="checkbox" id="filter-topic"> 主题</label>
-        <span style="flex:1"></span>
-        <span style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono);" id="graph-info"></span>
+        <div class="filter-group">
+          <label><input type="checkbox" id="filter-doc" checked> 文档</label>
+          <label><input type="checkbox" id="filter-entity" checked> 实体</label>
+          <label><input type="checkbox" id="filter-tag" checked> 标签</label>
+          <label><input type="checkbox" id="filter-topic" checked> 主题</label>
+        </div>
+        <select id="filter-edge">
+          <option value="">所有边</option>
+          <option value="mentions">mentions</option>
+          <option value="has_tag">has_tag</option>
+          <option value="belongs_to">belongs_to</option>
+          <option value="related">related</option>
+          <option value="extends">extends</option>
+          <option value="depends">depends</option>
+          <option value="child_of">child_of</option>
+          <option value="entity_related">entity_related</option>
+        </select>
+        <label><input type="checkbox" id="show-edge-labels"> 边标签</label>
+        <label><input type="checkbox" id="show-arrows" checked> 箭头</label>
+        <span class="graph-stats" id="graph-info"></span>
       </div>
       <svg id="graph-svg"></svg>
+      <div class="graph-legend" id="graph-legend"></div>
     </div>
+    <div class="graph-tooltip" id="graph-tooltip"></div>
   </div>
 
   <!-- ── Ask view ── -->
@@ -438,111 +482,325 @@ async function doSearch() {
   }
 }
 
-// ── Graph ──
+// ── Graph (D3.js) ──
+// 全局图数据与状态
+let graphData = {nodes: [], edges: []};
+let currentLayout = 'force';
+let focusNode = null;
+let graphSimulation = null;
+
+const TYPE_COLORS = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538'};
+const EDGE_COLORS = {
+  mentions: '#6B3FA0', has_tag: '#956400', belongs_to: '#346538',
+  related: '#1F6C9F', extends: '#1F6C9F', depends: '#1F6C9F',
+  implements: '#1F6C9F', child_of: '#956400', entity_related: '#6B3FA0',
+  references: '#787774', contradicts: '#9F2F2D', supersedes: '#9F2F2D',
+};
+
 async function renderGraph() {
-  const svg = document.getElementById('graph-svg');
-  svg.innerHTML = '';
+  const svgEl = document.getElementById('graph-svg');
+  svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载中...</text>';
   try {
-    // gather all docs + entities + edges
-    const [docRes, entRes] = await Promise.all([
-      fetch(API + '/api/documents?limit=50').then(r => r.json()),
-      fetch(API + '/api/entities').then(r => r.json()),
-    ]);
-    allDocs = docRes.documents || [];
-    allEntities = entRes.entities || [];
+    const r = await fetch(API + '/api/graph/full');
+    const d = await r.json();
+    graphData = {nodes: d.nodes || [], edges: d.edges || []};
+    // 计算度数
+    const degreeMap = {};
+    graphData.edges.forEach(e => {
+      degreeMap[e.source] = (degreeMap[e.source] || 0) + 1;
+      degreeMap[e.target] = (degreeMap[e.target] || 0) + 1;
+    });
+    graphData.nodes.forEach(n => { n.degree = degreeMap[n.id] || 0; });
+    renderLegend();
     buildGraph();
   } catch (e) {
-    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载失败</text>';
+    svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载失败</text>';
   }
 }
 
-function buildGraph() {
+function renderLegend() {
+  const legend = document.getElementById('graph-legend');
+  legend.innerHTML = Object.entries(TYPE_COLORS).map(([t, c]) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t}</div>`
+  ).join('');
+}
+
+function getFilteredData() {
   const showDoc = document.getElementById('filter-doc').checked;
   const showEntity = document.getElementById('filter-entity').checked;
   const showTag = document.getElementById('filter-tag').checked;
   const showTopic = document.getElementById('filter-topic').checked;
-  const svg = document.getElementById('graph-svg');
-  const W = svg.clientWidth, H = 520;
-  const nodes = [], edges = [];
-  const nodeMap = {};
+  const edgeFilter = document.getElementById('filter-edge').value;
+  const typeOk = (t) => ({document: showDoc, entity: showEntity, tag: showTag, topic: showTopic}[t] ?? true);
+  const visNodes = graphData.nodes.filter(n => typeOk(n.type));
+  const visIds = new Set(visNodes.map(n => n.id));
+  const visEdges = graphData.edges.filter(e =>
+    visIds.has(e.source) && visIds.has(e.target) &&
+    (!edgeFilter || e.type === edgeFilter)
+  );
+  return {nodes: visNodes, edges: visEdges};
+}
 
-  // Add doc nodes
-  if (showDoc) {
-    allDocs.forEach(d => {
-      const id = d.id;
-      nodeMap[id] = nodes.length;
-      nodes.push({id, label: d.title, type: 'document'});
-      // edges from doc
-      (d.out_edges || []).forEach(e => {
-        const target = e.node;
-        if (!nodeMap.hasOwnProperty(target)) {
-          nodeMap[target] = nodes.length;
-          const parts = target.split(':');
-          nodes.push({id: target, label: parts.pop(), type: parts[0]});
-        }
-        edges.push({from: nodeMap[id], to: nodeMap[target], type: e.edge_type});
-      });
+function buildGraph() {
+  const {nodes, edges} = getFilteredData();
+  const svgEl = document.getElementById('graph-svg');
+  const W = svgEl.clientWidth || 800, H = 560;
+
+  // 清空
+  svgEl.innerHTML = '';
+  if (graphSimulation) { graphSimulation.stop(); graphSimulation = null; }
+
+  if (!nodes.length) {
+    d3.select('#graph-svg').append('text')
+      .attr('x', W/2).attr('y', H/2).attr('text-anchor', 'middle')
+      .attr('fill', '#A8A6A1').text('无可见节点');
+    document.getElementById('graph-info').textContent = '0 节点 · 0 边';
+    return;
+  }
+
+  const svg = d3.select('#graph-svg').attr('viewBox', `0 0 ${W} ${H}`);
+  // 缩放/平移
+  const g = svg.append('g');
+  const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (e) => {
+    g.attr('transform', e.transform);
+  });
+  svg.call(zoom);
+
+  // 箭头 marker
+  const showArrows = document.getElementById('show-arrows').checked;
+  const defs = svg.append('defs');
+  Object.keys(EDGE_COLORS).forEach(et => {
+    defs.append('marker')
+      .attr('id', `arrow-${et}`).attr('viewBox', '0 -5 10 10')
+      .attr('refX', 14).attr('refY', 0).attr('markerWidth', 6).attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', EDGE_COLORS[et]);
+  });
+
+  // 边
+  const link = g.append('g').attr('class', 'links').selectAll('line')
+    .data(edges).enter().append('line')
+    .attr('class', 'graph-link')
+    .attr('stroke', d => EDGE_COLORS[d.type] || '#E2E0DC')
+    .attr('stroke-width', 1).attr('stroke-opacity', 0.4)
+    .attr('marker-end', d => showArrows ? `url(#arrow-${d.type})` : null);
+
+  // 边标签
+  const showEdgeLabels = document.getElementById('show-edge-labels').checked;
+  let edgeLabel = null;
+  if (showEdgeLabels) {
+    edgeLabel = g.append('g').attr('class', 'edge-labels').selectAll('text')
+      .data(edges).enter().append('text')
+      .attr('class', 'graph-edge-label')
+      .attr('text-anchor', 'middle').text(d => d.type);
+  }
+
+  // 节点
+  const node = g.append('g').attr('class', 'nodes').selectAll('g')
+    .data(nodes).enter().append('g')
+    .attr('class', 'graph-node')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active && graphSimulation) graphSimulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active && graphSimulation) graphSimulation.alphaTarget(0); })
+    );
+
+  node.append('circle')
+    .attr('r', d => Math.max(4, Math.min(14, 4 + d.degree * 0.8)))
+    .attr('fill', d => TYPE_COLORS[d.type] || '#787774')
+    .attr('stroke', '#fff').attr('stroke-width', 1.5)
+    .attr('fill-opacity', 0.85);
+
+  node.append('text')
+    .attr('class', 'graph-label')
+    .attr('dy', d => -(Math.max(4, Math.min(14, 4 + d.degree * 0.8)) + 4))
+    .attr('text-anchor', 'middle')
+    .text(d => d.label.length > 16 ? d.label.slice(0, 16) + '…' : d.label);
+
+  // Tooltip
+  const tooltip = document.getElementById('graph-tooltip');
+  node.on('mouseenter', (e, d) => {
+    tooltip.innerHTML = `<div class="tt-label">${esc(d.label)}</div>
+      <div class="tt-meta">类型: ${d.type} · 度: ${d.degree}${d.summary ? '<br>' + esc(d.summary.slice(0,80)) : ''}</div>`;
+    tooltip.classList.add('show');
+  })
+  .on('mousemove', (e) => {
+    tooltip.style.left = (e.pageX + 12) + 'px';
+    tooltip.style.top = (e.pageY - 10) + 'px';
+  })
+  .on('mouseleave', () => tooltip.classList.remove('show'));
+
+  // Hover 高亮
+  node.on('mouseover', (e, d) => {
+    const neighborIds = new Set([d.id]);
+    edges.forEach(le => {
+      if (le.source === d.id || le.source?.id === d.id) neighborIds.add(le.target?.id || le.target);
+      if (le.target === d.id || le.target?.id === d.id) neighborIds.add(le.source?.id || le.source);
+    });
+    node.classed('dimmed', n => !neighborIds.has(n.id));
+    link.classed('dimmed', le => {
+      const s = le.source?.id || le.source, t = le.target?.id || le.target;
+      return !(neighborIds.has(s) && neighborIds.has(t));
+    });
+    link.classed('highlight', le => {
+      const s = le.source?.id || le.source, t = le.target?.id || le.target;
+      return (s === d.id || t === d.id);
+    });
+  })
+  .on('mouseout', () => {
+    node.classed('dimmed', false);
+    link.classed('dimmed', false).classed('highlight', false);
+  });
+
+  // 单击：跳转
+  node.on('click', (e, d) => { graphNodeClick(d.id); });
+  // 双击：聚焦
+  node.on('dblclick', (e, d) => {
+    e.stopPropagation();
+    focusNode = d.id;
+    currentLayout = 'radial';
+    document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('active', b.dataset.layout === 'radial'));
+    applyLayout(nodes, edges, W, H);
+  });
+
+  // 应用布局
+  applyLayout(nodes, edges, W, H);
+
+  // 边标签位置更新
+  if (edgeLabel) {
+    edgeLabel.attr('x', d => {
+      const s = d.source?.id ? d.source : nodes.find(n => n.id === d.source);
+      const t = d.target?.id ? d.target : nodes.find(n => n.id === d.target);
+      return s && t ? (s.x + t.x) / 2 : 0;
+    }).attr('y', d => {
+      const s = d.source?.id ? d.source : nodes.find(n => n.id === d.source);
+      const t = d.target?.id ? d.target : nodes.find(n => n.id === d.target);
+      return s && t ? (s.y + t.y) / 2 : 0;
     });
   }
-  // Add entity nodes
-  if (showEntity) {
-    allEntities.forEach(e => {
-      if (!nodeMap.hasOwnProperty(e.id)) {
-        nodeMap[e.id] = nodes.length;
-        nodes.push({id: e.id, label: e.name, type: 'entity'});
-      }
+
+  document.getElementById('graph-info').textContent = `${nodes.length} 节点 · ${edges.length} 边`;
+}
+
+function applyLayout(nodes, edges, W, H) {
+  if (currentLayout === 'force') {
+    forceLayout(nodes, edges, W, H);
+  } else if (currentLayout === 'hierarchy') {
+    hierarchyLayout(nodes, edges, W, H);
+  } else if (currentLayout === 'radial') {
+    radialLayout(nodes, edges, W, H);
+  } else if (currentLayout === 'cluster') {
+    clusterLayout(nodes, edges, W, H);
+  }
+}
+
+function forceLayout(nodes, edges, W, H) {
+  if (graphSimulation) graphSimulation.stop();
+  graphSimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(60).strength(0.3))
+    .force('charge', d3.forceManyBody().strength(-120))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collide', d3.forceCollide().radius(d => Math.max(4, 4 + d.degree * 0.8) + 4));
+  graphSimulation.on('tick', () => updatePositions(nodes, edges));
+}
+
+function hierarchyLayout(nodes, edges, W, H) {
+  if (graphSimulation) graphSimulation.stop();
+  // 按度排序，度最高的为根
+  const sorted = [...nodes].sort((a, b) => b.degree - a.degree);
+  const levels = {};
+  sorted.forEach((n, i) => { levels[n.id] = Math.floor(i / Math.ceil(sorted.length / 5)); });
+  const maxLevel = Math.max(...Object.values(levels));
+  nodes.forEach(n => {
+    const lvl = levels[n.id] || 0;
+    n.x = W / 2 + (Math.random() - 0.5) * 200;
+    n.y = 40 + (lvl / Math.max(1, maxLevel)) * (H - 80);
+  });
+  // 轻量力导向微调
+  graphSimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(40).strength(0.1))
+    .force('charge', d3.forceManyBody().strength(-30))
+    .force('x', d3.forceX(d => W/2 + (levels[d.id]||0) * 0).strength(0.02))
+    .force('y', d3.forceY(d => 40 + (levels[d.id]||0) / Math.max(1,maxLevel) * (H-80)).strength(0.15))
+    .force('collide', d3.forceCollide().radius(12));
+  graphSimulation.on('tick', () => updatePositions(nodes, edges));
+}
+
+function radialLayout(nodes, edges, W, H) {
+  if (graphSimulation) graphSimulation.stop();
+  const center = focusNode || (nodes.length ? nodes.sort((a,b) => b.degree - a.degree)[0].id : null);
+  if (!center) return;
+  // BFS 距离
+  const dist = {[center]: 0};
+  const queue = [center];
+  while (queue.length) {
+    const cur = queue.shift();
+    edges.forEach(e => {
+      const s = e.source?.id || e.source, t = e.target?.id || e.target;
+      if (s === cur && dist[t] === undefined) { dist[t] = dist[cur] + 1; queue.push(t); }
+      if (t === cur && dist[s] === undefined) { dist[s] = dist[cur] + 1; queue.push(s); }
     });
   }
-  // Filter by type
-  const typeFilter = (n) => {
-    if (n.type === 'document') return showDoc;
-    if (n.type === 'entity') return showEntity;
-    if (n.type === 'tag') return showTag;
-    if (n.type === 'topic') return showTopic;
-    return true;
-  };
-  const visibleIdx = new Set();
-  nodes.forEach((n, i) => { if (typeFilter(n)) visibleIdx.add(i); });
-  const visNodes = nodes.filter((_, i) => visibleIdx.has(i));
-  const visEdges = edges.filter(e => visibleIdx.has(e.from) && visibleIdx.has(e.to));
+  nodes.forEach(n => { n._dist = dist[n.id] !== undefined ? dist[n.id] : 99; });
+  const maxDist = Math.max(...nodes.map(n => n._dist));
+  const cx = W / 2, cy = H / 2;
+  // 按距离分环
+  const ringCounts = {};
+  nodes.forEach(n => { ringCounts[n._dist] = (ringCounts[n._dist] || 0) + 1; });
+  const ringIdx = {};
+  nodes.forEach(n => {
+    const d = n._dist;
+    ringIdx[d] = ringIdx[d] || 0;
+    const angle = (ringIdx[d] / ringCounts[d]) * 2 * Math.PI;
+    const R = d === 0 ? 0 : (d / Math.max(1, maxDist)) * Math.min(W, H) * 0.4;
+    n.x = cx + R * Math.cos(angle);
+    n.y = cy + R * Math.sin(angle);
+    ringIdx[d]++;
+  });
+  graphSimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(50).strength(0.2))
+    .force('charge', d3.forceManyBody().strength(-50))
+    .force('r', d3.forceRadial(d => d._dist === 0 ? 0 : (d._dist / Math.max(1,maxDist)) * Math.min(W,H)*0.4, cx, cy).strength(0.5))
+    .force('collide', d3.forceCollide().radius(10));
+  graphSimulation.on('tick', () => updatePositions(nodes, edges));
+}
 
-  // Simple circular layout
-  const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.38;
-  visNodes.forEach((n, i) => {
-    const a = (i / visNodes.length) * 2 * Math.PI - Math.PI / 2;
-    n.x = cx + R * Math.cos(a);
-    n.y = cy + R * Math.sin(a);
+function clusterLayout(nodes, edges, W, H) {
+  if (graphSimulation) graphSimulation.stop();
+  // 按类型分 4 个扇区
+  const types = ['document', 'entity', 'tag', 'topic'];
+  const cx = W / 2, cy = H / 2;
+  const sectorAngle = (2 * Math.PI) / types.length;
+  nodes.forEach(n => {
+    const ti = types.indexOf(n.type);
+    const baseAngle = ti * sectorAngle - Math.PI / 2;
+    const R = 100 + Math.random() * 80;
+    const spread = (Math.random() - 0.5) * sectorAngle * 0.8;
+    n._clusterAngle = baseAngle + spread;
+    n._clusterR = R;
+    n.x = cx + R * Math.cos(n._clusterAngle);
+    n.y = cy + R * Math.sin(n._clusterAngle);
   });
+  graphSimulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(50).strength(0.15))
+    .force('charge', d3.forceManyBody().strength(-60))
+    .force('x', d3.forceX(d => cx + d._clusterR * Math.cos(d._clusterAngle)).strength(0.15))
+    .force('y', d3.forceY(d => cy + d._clusterR * Math.sin(d._clusterAngle)).strength(0.15))
+    .force('collide', d3.forceCollide().radius(10));
+  graphSimulation.on('tick', () => updatePositions(nodes, edges));
+}
 
-  // Colors by type
-  const colorMap = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538'};
-  let html = '';
-  // edges
-  visEdges.forEach(e => {
-    const a = visNodes.find(n => nodes[nodeMap[n.id]] === nodes[e.from]) || visNodes[e.from];
-    html += `<line class="graph-edge" x1="${a.x}" y1="${a.y}" x2="${visNodes[e.to].x}" y2="${visNodes[e.to].y}"/>`;
-  });
-  // Fix: remap indices
-  // Actually rebuild edges with visNodes indices
-  const visNodeMap = {};
-  visNodes.forEach((n, i) => { visNodeMap[n.id] = i; });
-  html = '';
-  visEdges.forEach(e => {
-    const fromNode = visNodes[visNodeMap[nodes[e.from].id] ?? e.from];
-    const toNode = visNodes[visNodeMap[nodes[e.to].id] ?? e.to];
-    if (fromNode && toNode) {
-      html += `<line class="graph-edge" x1="${fromNode.x}" y1="${fromNode.y}" x2="${toNode.x}" y2="${toNode.y}"/>`;
-    }
-  });
-  visNodes.forEach(n => {
-    const c = colorMap[n.type] || '#787774';
-    html += `<g class="graph-node" onclick="graphNodeClick('${n.id}')">
-      <circle cx="${n.x}" cy="${n.y}" r="6" fill="${c}" opacity="0.85"/>
-      <text class="graph-label" x="${n.x}" y="${n.y - 10}" text-anchor="middle">${esc(n.label.slice(0, 20))}</text>
-    </g>`;
-  });
-  svg.innerHTML = html;
-  document.getElementById('graph-info').textContent = `${visNodes.length} 节点 · ${visEdges.length} 边`;
+function updatePositions(nodes, edges) {
+  d3.select('#graph-svg').selectAll('.graph-link')
+    .attr('x1', d => (d.source?.id ? d.source : d.source).x)
+    .attr('y1', d => (d.source?.id ? d.source : d.source).y)
+    .attr('x2', d => (d.target?.id ? d.target : d.target).x)
+    .attr('y2', d => (d.target?.id ? d.target : d.target).y);
+  d3.select('#graph-svg').selectAll('.graph-node')
+    .attr('transform', d => `translate(${d.x},${d.y})`);
+  d3.select('#graph-svg').selectAll('.edge-labels text')
+    .attr('x', d => ((d.source?.id ? d.source : d.source).x + (d.target?.id ? d.target : d.target).x) / 2)
+    .attr('y', d => ((d.source?.id ? d.source : d.source).y + (d.target?.id ? d.target : d.target).y) / 2);
 }
 
 function graphNodeClick(nodeId) {
@@ -551,16 +809,32 @@ function graphNodeClick(nodeId) {
     document.querySelector('.tab[data-tab=library]').click();
     showDocDetail(nodeId);
   } else if (type === 'entity') {
-    // go to library and search by entity name
     document.querySelector('.tab[data-tab=library]').click();
     const name = nodeId.split(':').pop();
     document.getElementById('search-input').value = name;
     doSearch();
+  } else if (type === 'tag' || type === 'topic') {
+    document.querySelector('.tab[data-tab=library]').click();
+    document.getElementById('search-input').value = nodeId.split(':').pop();
+    doSearch();
   }
 }
 
-['filter-doc', 'filter-entity', 'filter-tag', 'filter-topic'].forEach(id => {
-  document.getElementById(id).addEventListener('change', buildGraph);
+// 布局切换按钮
+document.querySelectorAll('.layout-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLayout = btn.dataset.layout;
+    if (currentLayout !== 'radial') focusNode = null;
+    buildGraph();
+  });
+});
+
+// 过滤器
+['filter-doc', 'filter-entity', 'filter-tag', 'filter-topic', 'filter-edge', 'show-edge-labels', 'show-arrows'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', buildGraph);
 });
 
 // ── Ask ──

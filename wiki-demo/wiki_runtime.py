@@ -269,16 +269,51 @@ def neighbors(
     edge_type: str | None = None,
     depth: int = 1,
 ) -> list[dict]:
-    """图邻接遍历。direction: out/in/both。"""
-    rid = node_id if ":" in node_id else _rid(node_id.split(":")[0] if ":" in node_id else "document", node_id)
-    results: list[dict] = []
+    """图邻接遍历。direction: out/in/both。depth>1 时做 BFS 多跳。
 
+    depth=1 返回直接邻居；depth>1 返回 depth 跳内所有可达邻居（含中间节点），
+    每条结果额外带 hop 字段表示距离。
+    """
+    rid = _normalize_rid(node_id)
+    if depth <= 1:
+        return _single_hop_neighbors(rid, direction, edge_type)
+
+    # BFS 多跳
+    visited: set[str] = {rid}
+    results: list[dict] = []
+    frontier: list[str] = [rid]
+    for hop in range(1, depth + 1):
+        next_frontier: list[str] = []
+        for current in frontier:
+            nbrs = _single_hop_neighbors(current, direction, edge_type)
+            for nb in nbrs:
+                nb_node = nb["node"]
+                nb["hop"] = hop
+                results.append(nb)
+                if nb_node not in visited:
+                    visited.add(nb_node)
+                    next_frontier.append(nb_node)
+        frontier = next_frontier
+        if not frontier:
+            break
+    return results
+
+
+def _normalize_rid(node_id: str) -> str:
+    """将 node_id 规范化为 record id。"""
+    if ":" in node_id:
+        return node_id
+    return _rid("document", node_id)
+
+
+def _single_hop_neighbors(rid: str, direction: str, edge_type: str | None) -> list[dict]:
+    """单跳邻接查询（内部使用）。"""
+    results: list[dict] = []
     edge_types = [edge_type] if edge_type else [
         "belongs_to", "has_tag", "mentions", "references",
         "related", "depends", "extends", "implements",
         "contradicts", "supersedes", "child_of", "entity_related",
     ]
-
     for et in edge_types:
         if direction in ("out", "both"):
             try:
@@ -407,10 +442,11 @@ def entity_lookup(name: str) -> dict | None:
 
 
 def graph_subtree(node_id: str, depth: int = 2) -> dict:
-    """以某节点为根，获取局部子图（节点+边）。"""
-    rid = node_id if ":" in node_id else _rid("document", node_id)
+    """以某节点为根，获取局部子图（节点+边）。边去重。"""
+    rid = _normalize_rid(node_id)
     nodes: dict[str, dict] = {}
     edges: list[dict] = []
+    seen_edges: set[frozenset] = set()
 
     def _visit(current_rid: str, current_depth: int):
         if current_depth < 0:
@@ -428,14 +464,16 @@ def graph_subtree(node_id: str, depth: int = 2) -> dict:
         else:
             nodes[current_rid] = {"id": current_rid, "label": current_rid, "type": "unknown"}
 
-        nbrs = neighbors(current_rid, direction="both")
+        nbrs = _single_hop_neighbors(current_rid, "both", None)
         for nb in nbrs:
             nb_node = nb["node"]
-            edges.append({
-                "from": current_rid if nb["direction"] == "out" else nb_node,
-                "to": nb_node if nb["direction"] == "out" else current_rid,
-                "type": nb["edge_type"],
-            })
+            src = current_rid if nb["direction"] == "out" else nb_node
+            dst = nb_node if nb["direction"] == "out" else current_rid
+            # 边去重：用 frozenset({src, dst, type}) 标识
+            edge_key = frozenset({src, dst, nb["edge_type"]})
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                edges.append({"from": src, "to": dst, "type": nb["edge_type"]})
             if nb_node not in nodes:
                 _visit(nb_node, current_depth - 1)
 
@@ -444,8 +482,347 @@ def graph_subtree(node_id: str, depth: int = 2) -> dict:
 
 
 # ====================================================================== #
-#  Metadata Service
+#  图查询算法（BFS/DFS/中心性/路径/共现/血缘）
+#  对应 design.md 图结构设计，提供多样的知识图谱查询能力
 # ====================================================================== #
+# 所有节点类型，用于全图遍历
+_ALL_TABLES = ["document", "entity", "tag", "topic"]
+
+
+def _get_node_label(rid: str) -> dict:
+    """获取节点的基本信息（label + type）。"""
+    node = _q_one(f"SELECT * FROM {rid}")
+    if node:
+        return {
+            "id": rid,
+            "label": node.get("title") or node.get("name") or rid,
+            "type": rid.split(":")[0] if ":" in rid else "unknown",
+        }
+    return {"id": rid, "label": rid, "type": rid.split(":")[0] if ":" in rid else "unknown"}
+
+
+def shortest_path(src_id: str, dst_id: str, max_depth: int = 6) -> dict:
+    """BFS 最短路径：两节点间的最短关系路径。
+
+    跨 document/entity/tag 节点遍历，返回路径节点序列 + 边序列。
+    """
+    src = _normalize_rid(src_id)
+    dst = _normalize_rid(dst_id)
+    if src == dst:
+        return {"path": [src], "edges": [], "length": 0}
+
+    # BFS
+    from collections import deque
+    queue: deque = deque([(src, [src], [])])
+    visited: set[str] = {src}
+
+    while queue:
+        current, path, edge_path = queue.popleft()
+        if len(path) - 1 >= max_depth:
+            continue
+        nbrs = _single_hop_neighbors(current, "both", None)
+        for nb in nbrs:
+            nb_node = nb["node"]
+            if nb_node == dst:
+                full_path = path + [nb_node]
+                full_edges = edge_path + [{
+                    "from": current if nb["direction"] == "out" else nb_node,
+                    "to": nb_node if nb["direction"] == "out" else current,
+                    "type": nb["edge_type"],
+                }]
+                return {"path": full_path, "edges": full_edges, "length": len(full_path) - 1}
+            if nb_node not in visited:
+                visited.add(nb_node)
+                queue.append((
+                    nb_node,
+                    path + [nb_node],
+                    edge_path + [{
+                        "from": current if nb["direction"] == "out" else nb_node,
+                        "to": nb_node if nb["direction"] == "out" else current,
+                        "type": nb["edge_type"],
+                    }],
+                ))
+    return {"path": [], "edges": [], "length": -1, "reason": "未找到路径"}
+
+
+def common_neighbors(node_a: str, node_b: str) -> dict:
+    """共同邻居：两节点的共同邻居，发现隐含关联。"""
+    rid_a = _normalize_rid(node_a)
+    rid_b = _normalize_rid(node_b)
+    nbrs_a = _single_hop_neighbors(rid_a, "both", None)
+    nbrs_b = _single_hop_neighbors(rid_b, "both", None)
+    set_a = {nb["node"] for nb in nbrs_a}
+    set_b = {nb["node"] for nb in nbrs_b}
+    common = set_a & set_b
+    # 排除彼此
+    common.discard(rid_a)
+    common.discard(rid_b)
+
+    result = []
+    for node_id in common:
+        info = _get_node_label(node_id)
+        # 找出 a 和 b 分别通过什么边连到这个共同邻居
+        a_edges = [nb for nb in nbrs_a if nb["node"] == node_id]
+        b_edges = [nb for nb in nbrs_b if nb["node"] == node_id]
+        result.append({
+            "node": node_id,
+            "label": info["label"],
+            "type": info["type"],
+            "a_edge": a_edges[0]["edge_type"] if a_edges else None,
+            "b_edge": b_edges[0]["edge_type"] if b_edges else None,
+        })
+    return {"node_a": rid_a, "node_b": rid_b, "common": result, "count": len(result)}
+
+
+def node_degree(node_id: str) -> dict:
+    """度中心性：节点的入度/出度/总度。"""
+    rid = _normalize_rid(node_id)
+    out_nbrs = _single_hop_neighbors(rid, "out", None)
+    in_nbrs = _single_hop_neighbors(rid, "in", None)
+    return {
+        "node": rid,
+        "out_degree": len(out_nbrs),
+        "in_degree": len(in_nbrs),
+        "total_degree": len(out_nbrs) + len(in_nbrs),
+        "out_neighbors": [{"node": nb["node"], "edge": nb["edge_type"]} for nb in out_nbrs],
+        "in_neighbors": [{"node": nb["node"], "edge": nb["edge_type"]} for nb in in_nbrs],
+    }
+
+
+def top_central_nodes(limit: int = 10) -> list[dict]:
+    """度中心性排序：知识库中度最高的 hub 节点。"""
+    degrees: list[dict] = []
+    for table in _ALL_TABLES:
+        rows = _q(f"SELECT id FROM {table}")
+        for r in _flatten(rows):
+            if not isinstance(r, dict):
+                continue
+            rid = _extract_id(r.get("id", ""))
+            deg = node_degree(rid)
+            degrees.append({
+                "node": rid,
+                "label": _get_node_label(rid)["label"],
+                "type": rid.split(":")[0] if ":" in rid else "unknown",
+                "degree": deg["total_degree"],
+                "in_degree": deg["in_degree"],
+                "out_degree": deg["out_degree"],
+            })
+    degrees.sort(key=lambda x: -x["degree"])
+    return degrees[:limit]
+
+
+def graph_stats() -> dict:
+    """全局图统计：节点数/边数/各边类型计数/平均度/密度。"""
+    node_counts: dict[str, int] = {}
+    total_nodes = 0
+    for table in _ALL_TABLES:
+        try:
+            rows = _q(f"SELECT count() FROM {table} GROUP ALL")
+            r = _flatten(rows)
+            cnt = r[0].get("count", 0) if r and isinstance(r[0], dict) else 0
+        except Exception:
+            cnt = 0
+        node_counts[table] = cnt
+        total_nodes += cnt
+
+    edge_types = [
+        "belongs_to", "has_tag", "mentions", "references",
+        "related", "depends", "extends", "implements",
+        "contradicts", "supersedes", "child_of", "entity_related",
+    ]
+    edge_counts: dict[str, int] = {}
+    total_edges = 0
+    for et in edge_types:
+        try:
+            rows = _q(f"SELECT count() FROM {et} GROUP ALL")
+            r = _flatten(rows)
+            cnt = r[0].get("count", 0) if r and isinstance(r[0], dict) else 0
+        except Exception:
+            cnt = 0
+        edge_counts[et] = cnt
+        total_edges += cnt
+
+    avg_degree = (2 * total_edges / total_nodes) if total_nodes > 0 else 0
+    # 密度 = 2E / (N*(N-1))，有向图用 E/(N*(N-1))，这里用无向近似
+    max_edges = total_nodes * (total_nodes - 1) if total_nodes > 1 else 1
+    density = (2 * total_edges / max_edges) if max_edges > 0 else 0
+
+    return {
+        "nodes": node_counts,
+        "total_nodes": total_nodes,
+        "edges": edge_counts,
+        "total_edges": total_edges,
+        "avg_degree": round(avg_degree, 2),
+        "density": round(density, 4),
+    }
+
+
+def entity_co_occurrence(entity_name: str) -> dict:
+    """共现分析：与某实体共同出现在文档中的其他实体。
+
+    通过 mentions 反查：找到 mention 该实体的文档，
+    再找这些文档 mention 的其他实体。
+    """
+    # 找到实体
+    rows = _q("SELECT * FROM entity WHERE name = $name", {"name": entity_name})
+    ents = _flatten(rows)
+    if not ents:
+        return {"entity": entity_name, "co_occurrences": [], "count": 0}
+    eid = _extract_id(ents[0].get("id", ""))
+
+    # 找 mention 该实体的文档
+    doc_ids: list[str] = []
+    try:
+        d_rows = _q(f"SELECT in AS doc FROM {eid}<-mentions")
+        for d in _flatten(d_rows):
+            if isinstance(d, dict) and d.get("doc"):
+                doc_ids.append(_extract_id(d["doc"]))
+    except Exception:
+        pass
+
+    # 对每个文档，找其 mention 的其他实体
+    co_occur: dict[str, int] = {}
+    for did in doc_ids:
+        try:
+            e_rows = _q(f"SELECT out AS ent FROM {did}->mentions")
+            for e in _flatten(e_rows):
+                if isinstance(e, dict) and e.get("ent"):
+                    other_eid = _extract_id(e["ent"])
+                    if other_eid != eid:
+                        co_occur[other_eid] = co_occur.get(other_eid, 0) + 1
+        except Exception:
+            pass
+
+    result = []
+    for other_eid, count in sorted(co_occur.items(), key=lambda x: -x[1]):
+        info = _get_node_label(other_eid)
+        result.append({
+            "entity": other_eid,
+            "name": info["label"],
+            "co_occurrence_count": count,
+        })
+    return {"entity": eid, "entity_name": entity_name, "co_occurrences": result, "count": len(result)}
+
+
+def knowledge_lineage(doc_id: str, max_depth: int = 3) -> dict:
+    """知识血缘：文档的上下游知识链。
+
+    递归遍历 extends/depends/related/supersedes 边，
+    对应 design.md "展示Embedding上下游知识" = Graph Traversal。
+    """
+    rid = _normalize_rid(doc_id)
+    lineage_edges = ["extends", "depends", "related", "implements", "supersedes"]
+    nodes: dict[str, dict] = {}
+    edges: list[dict] = []
+    seen_edges: set[frozenset] = set()
+
+    def _trace(current_rid: str, current_depth: int, direction: str):
+        if current_depth <= 0:
+            return
+        if current_rid not in nodes:
+            nodes[current_rid] = _get_node_label(current_rid)
+        for et in lineage_edges:
+            nbrs = _single_hop_neighbors(current_rid, direction, et)
+            for nb in nbrs:
+                nb_node = nb["node"]
+                src = current_rid if nb["direction"] == "out" else nb_node
+                dst = nb_node if nb["direction"] == "out" else current_rid
+                edge_key = frozenset({src, dst, et})
+                if edge_key not in seen_edges:
+                    seen_edges.add(edge_key)
+                    edges.append({"from": src, "to": dst, "type": et})
+                if nb_node not in nodes:
+                    _trace(nb_node, current_depth - 1, direction)
+
+    _trace(rid, max_depth, "out")   # 下游
+    _trace(rid, max_depth, "in")    # 上游
+    return {
+        "root": rid,
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "upstream_count": sum(1 for e in edges if e["to"] == rid),
+        "downstream_count": sum(1 for e in edges if e["from"] == rid),
+    }
+
+
+def multi_hop_neighbors(node_id: str, depth: int = 3) -> dict:
+    """多跳邻接：BFS N 跳，返回按层级分组的节点。"""
+    rid = _normalize_rid(node_id)
+    visited: set[str] = {rid}
+    levels: list[list[dict]] = []
+    frontier: list[str] = [rid]
+
+    for hop in range(1, depth + 1):
+        next_frontier: list[str] = []
+        level_nodes: list[dict] = []
+        for current in frontier:
+            nbrs = _single_hop_neighbors(current, "both", None)
+            for nb in nbrs:
+                nb_node = nb["node"]
+                if nb_node not in visited:
+                    visited.add(nb_node)
+                    next_frontier.append(nb_node)
+                    info = _get_node_label(nb_node)
+                    level_nodes.append({
+                        "id": nb_node,
+                        "label": info["label"],
+                        "type": info["type"],
+                        "via": current,
+                        "edge": nb["edge_type"],
+                        "hop": hop,
+                    })
+        levels.append({"hop": hop, "nodes": level_nodes})
+        frontier = next_frontier
+        if not frontier:
+            break
+
+    return {"root": rid, "levels": levels, "total_reachable": sum(len(l["nodes"]) for l in levels)}
+
+
+def graph_full() -> dict:
+    """全图数据：所有节点 + 所有边，供前端 D3 渲染。
+
+    节点按类型分组（document/entity/tag/topic），每类含 id/label/type。
+    边按类型查询，含 from/to/type。
+    """
+    nodes: list[dict] = []
+    for table in _ALL_TABLES:
+        rows = _q(f"SELECT * FROM {table}")
+        for r in _flatten(rows):
+            if not isinstance(r, dict):
+                continue
+            rid = _extract_id(r.get("id", ""))
+            label = r.get("title") or r.get("name") or rid
+            nodes.append({
+                "id": rid,
+                "label": label,
+                "type": table,
+                "summary": r.get("summary") or r.get("description") or "",
+            })
+
+    edge_types = [
+        "belongs_to", "has_tag", "mentions", "references",
+        "related", "depends", "extends", "implements",
+        "contradicts", "supersedes", "child_of", "entity_related",
+    ]
+    edges: list[dict] = []
+    for et in edge_types:
+        try:
+            rows = _q(f"SELECT in, out FROM {et}")
+            for r in _flatten(rows):
+                if isinstance(r, dict) and r.get("in") and r.get("out"):
+                    edges.append({
+                        "source": _extract_id(r["in"]),
+                        "target": _extract_id(r["out"]),
+                        "type": et,
+                    })
+        except Exception:
+            pass
+
+    return {"nodes": nodes, "edges": edges, "node_count": len(nodes), "edge_count": len(edges)}
+
+
+
 def ensure_topic(key: str, name: str, description: str = "") -> str:
     """确保 topic 节点存在（幂等）。返回 record id。"""
     rid = _rid("topic", key)
@@ -668,33 +1045,89 @@ def _fts_search(query: str, topk: int) -> list[dict]:
 
 
 def _graph_search(query: str, topk: int) -> list[dict]:
-    """图检索：从 query 中识别已知实体名，反查 mentions 该实体的文档。"""
+    """图检索：实体匹配 → mentions 反查 → 关联文档扩展。
+
+    三步图检索：
+    ① 实体名匹配 → mentions 反查文档
+    ② 命中文档沿 related/extends/depends 边扩展 1 跳（图扩展检索）
+    ③ 实体间 entity_related 边反查关联实体再 mentions 反查
+    """
     all_entities = list_entities()
     if not all_entities:
         return []
     query_lower = query.lower()
-    matched: list[dict] = []
+
+    # ① 实体名匹配 → mentions 反查
+    direct_docs: list[dict] = []
+    matched_entities: list[str] = []
     for ent in all_entities:
         if ent["name"].lower() in query_lower:
-            # 反查 mentions 该实体的文档
-            eid = ent["id"]
+            matched_entities.append(ent["id"])
             try:
-                rows = _q(f"SELECT in AS doc FROM {eid}<-mentions")
+                rows = _q(f"SELECT in AS doc FROM {ent['id']}<-mentions")
                 for r in _flatten(rows):
                     if isinstance(r, dict) and r.get("doc"):
                         doc = get_document(_extract_id(r["doc"]))
                         if doc:
-                            matched.append({
+                            direct_docs.append({
                                 "doc_id": doc["id"],
                                 "title": doc.get("title", ""),
                                 "excerpt": (doc.get("content", "") or "")[:120],
+                                "via": "entity-mention",
                             })
             except Exception:
                 pass
-    # 去重
+
+    # ② 图扩展：命中文档沿 related/extends/depends 边扩展 1 跳
+    expanded_docs: list[dict] = []
+    direct_doc_ids = {d["doc_id"] for d in direct_docs}
+    for doc_id in list(direct_doc_ids):
+        for et in ["related", "extends", "depends", "implements"]:
+            try:
+                rows = _q(f"SELECT out AS node FROM {doc_id}->{et}")
+                for r in _flatten(rows):
+                    if isinstance(r, dict) and r.get("node"):
+                        nid = _extract_id(r["node"])
+                        if nid not in direct_doc_ids:
+                            doc = get_document(nid)
+                            if doc:
+                                expanded_docs.append({
+                                    "doc_id": doc["id"],
+                                    "title": doc.get("title", ""),
+                                    "excerpt": (doc.get("content", "") or "")[:120],
+                                    "via": f"graph-expand:{et}",
+                                })
+            except Exception:
+                pass
+
+    # ③ entity_related 边反查关联实体
+    for eid in matched_entities:
+        try:
+            rows = _q(f"SELECT out AS ent FROM {eid}->entity_related")
+            for r in _flatten(rows):
+                if isinstance(r, dict) and r.get("ent"):
+                    related_eid = _extract_id(r["ent"])
+                    d_rows = _q(f"SELECT in AS doc FROM {related_eid}<-mentions")
+                    for d in _flatten(d_rows):
+                        if isinstance(d, dict) and d.get("doc"):
+                            did = _extract_id(d["doc"])
+                            if did not in direct_doc_ids:
+                                doc = get_document(did)
+                                if doc:
+                                    expanded_docs.append({
+                                        "doc_id": doc["id"],
+                                        "title": doc.get("title", ""),
+                                        "excerpt": (doc.get("content", "") or "")[:120],
+                                        "via": "entity-related",
+                                    })
+        except Exception:
+            pass
+
+    # 合并去重（直接命中优先，扩展结果按 via 标注）
+    all_results = direct_docs + expanded_docs
     seen = set()
     unique = []
-    for m in matched:
+    for m in all_results:
         if m["doc_id"] not in seen:
             seen.add(m["doc_id"])
             unique.append(m)
