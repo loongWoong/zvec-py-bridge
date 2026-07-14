@@ -14,8 +14,19 @@ import requests
 ZVEC_URL = os.environ.get("ZVEC_URL", "http://localhost:8666")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:4b")
-LLM_MODEL = os.environ.get("LLM_MODEL", "pdurugyan/qwen3.5-9b-deepseek-v4-flash-Q4_K_M:latest")  # 生成回答用，可选
-OCR_MODEL = os.environ.get("OCR_MODEL", "glm-ocr")    # OCR 识别用
+OCR_MODEL = os.environ.get("OCR_MODEL", "glm-ocr")    # OCR 识别用（依赖 Ollama 原生接口）
+OCR_URL = os.environ.get("OCR_URL", OLLAMA_URL)        # OCR 服务地址（默认复用 Ollama）
+
+# —— 生成回答用的大模型（可单独配置，独立于 Ollama）——
+# LLM_URL   : 大模型服务地址。默认复用 OLLAMA_URL，可指向任意 OpenAI 兼容端点
+#             （如 vLLM、LM Studio、OpenAI 等）。
+LLM_URL = os.environ.get("LLM_URL", "http://127.0.0.1:8000")
+# LLM_API   : 接口格式。"ollama" 使用 Ollama 原生 /api/chat；
+#             "openai" 使用 OpenAI 兼容的 /v1/chat/completions。
+LLM_API = os.environ.get("LLM_API", "openai")
+# LLM_API_KEY : 访问大模型服务所需的密钥（OpenAI 兼容端点通常需要）。
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "sk-123")
+LLM_MODEL = os.environ.get("LLM_MODEL", "hy3")  # 生成回答用，可选
 
 COLLECTION_NAME = "rag_demo"
 EMBED_FUNC_NAME = "ollama_qwen3"
@@ -149,7 +160,11 @@ def check_health() -> dict:
 
     返回 {"zvec": bool, "zvec_version": str, "ollama": bool, "has_embed_model": bool}
     """
-    result: dict = {"zvec": False, "zvec_version": "", "ollama": False, "has_embed_model": False}
+    result: dict = {
+        "zvec": False, "zvec_version": "",
+        "ollama": False, "has_embed_model": False,
+        "llm": False, "llm_model": LLM_MODEL,
+    }
 
     try:
         r = zvec_api("GET", "/health", timeout=5)
@@ -167,6 +182,20 @@ def check_health() -> dict:
             models = [m["name"] for m in r.json().get("models", [])]
             result["has_embed_model"] = any(EMBED_MODEL in m for m in models)
             result["ollama_models"] = models
+    except requests.ConnectionError:
+        pass
+
+    # 单独探测大模型服务（可能与 Ollama 不同）
+    try:
+        if LLM_API == "openai":
+            headers = (
+                {"Authorization": f"Bearer {LLM_API_KEY}"}
+                if LLM_API_KEY else {}
+            )
+            r = requests.get(f"{LLM_URL}/v1/models", headers=headers, timeout=5)
+        else:
+            r = requests.get(f"{LLM_URL}/api/tags", timeout=5)
+        result["llm"] = r.status_code == 200
     except requests.ConnectionError:
         pass
 
@@ -293,8 +322,60 @@ def search(query: str, topk: int = 3) -> list[dict]:
     ]
 
 
+def call_llm(messages: list[dict], model: str | None = None,
+             temperature: float = 0.7, **kwargs) -> str:
+    """调用大模型生成文本，返回 assistant 消息内容（已 strip）。
+
+    支持两种接口格式（由 LLM_API 决定）：
+      - "ollama" : Ollama 原生 /api/chat
+      - "openai" : OpenAI 兼容 /v1/chat/completions（vLLM / LM Studio / OpenAI 等）
+
+    kwargs 中的额外字段（如 tools）会透传到请求体，便于扩展。
+    """
+    model = model or LLM_MODEL
+
+    if LLM_API == "openai":
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": False,
+            **kwargs,
+        }
+        headers = (
+            {"Authorization": f"Bearer {LLM_API_KEY}"}
+            if LLM_API_KEY else {}
+        )
+        r = requests.post(
+            f"{LLM_URL}/v1/chat/completions",
+            json=payload, headers=headers, timeout=120,
+        )
+        if r.status_code != 200:
+            raise KBError(
+                f"LLM 生成失败 (模型 {model}): ({r.status_code}) {r.text[:200]}",
+                r.status_code,
+            )
+        return r.json()["choices"][0]["message"]["content"].strip()
+
+    # 默认：Ollama 原生格式
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": temperature},
+        **kwargs,
+    }
+    r = requests.post(f"{LLM_URL}/api/chat", json=payload, timeout=120)
+    if r.status_code != 200:
+        raise KBError(
+            f"LLM 生成失败 (模型 {model}): ({r.status_code}) {r.text[:200]}",
+            r.status_code,
+        )
+    return r.json()["message"]["content"].strip()
+
+
 def rag_ask(question: str, topk: int = 3) -> dict:
-    """RAG 问答：检索相关文档 → 拼接上下文 → 调用 Ollama 生成回答。
+    """RAG 问答：检索相关文档 → 拼接上下文 → 调用大模型生成回答。
 
     返回 {"documents": [...], "answer": str}
     """
@@ -308,17 +389,7 @@ def rag_ask(question: str, topk: int = 3) -> dict:
         f"问题：{question}\n\n"
         f"回答："
     )
-    r = requests.post(f"{OLLAMA_URL}/api/chat", json={
-        "model": LLM_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-    }, timeout=120)
-    if r.status_code != 200:
-        raise KBError(
-            f"Ollama 生成失败 (模型 {LLM_MODEL}): ({r.status_code}) {r.text[:200]}",
-            r.status_code,
-        )
-    answer = r.json()["message"]["content"].strip()
+    answer = call_llm([{"role": "user", "content": prompt}])
     return {"documents": docs, "answer": answer}
 
 

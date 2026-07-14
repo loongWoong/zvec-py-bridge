@@ -105,7 +105,7 @@ def _ocr_single(image_bytes: bytes) -> str:
     import requests
 
     img_b64 = base64.b64encode(image_bytes).decode()
-    r = requests.post(f"{kb.OLLAMA_URL}/api/generate", json={
+    r = requests.post(f"{kb.OCR_URL}/api/generate", json={
         "model": kb.OCR_MODEL,
         "prompt": _OCR_PROMPT,
         "images": [img_b64],

@@ -20,7 +20,14 @@ RAG 流程：知识入库 → 语义检索 → 生成回答。
     python rag_demo.py
 
 可通过环境变量覆盖默认地址：
-    ZVEC_URL=http://localhost:8666 OLLAMA_URL=http://localhost:11434 python rag_demo.py
+    ZVEC_URL=http://localhost:8666 OLLAMA_URL=http://localhost:11434 \\
+    LLM_URL=http://localhost:8000 LLM_API=openai LLM_API_KEY=sk-xxx \\
+    python rag_demo.py
+
+说明：
+    LLM_URL   大模型服务地址（默认复用 OLLAMA_URL，可指向任意 OpenAI 兼容端点）
+    LLM_API   接口格式：ollama（默认，/api/chat）或 openai（/v1/chat/completions）
+    LLM_API_KEY  访问大模型服务所需密钥（OpenAI 兼容端点通常需要）
 """
 from __future__ import annotations
 
@@ -33,6 +40,8 @@ from kb_data import (
     EMBED_MODEL,
     KBError,
     LLM_MODEL,
+    LLM_URL,
+    LLM_API,
     OLLAMA_URL,
     TEST_QUERIES,
     ZVEC_URL,
@@ -83,6 +92,9 @@ def step_health_check() -> bool:
     check(f"Ollama 已安装 {EMBED_MODEL}", health["has_embed_model"])
     if not health["has_embed_model"]:
         print(f"     提示: 运行  ollama pull {EMBED_MODEL}  拉取模型")
+    check(f"LLM 服务可达 ({LLM_API})", health["llm"])
+    if not health["llm"]:
+        print(f"     提示: 检查 LLM_URL={LLM_URL} 与 LLM_API={LLM_API} 是否正确")
     return health["zvec"] and health["has_embed_model"]
 
 
@@ -246,6 +258,7 @@ def main() -> int:
     print("╚" + "═" * 60 + "╝")
     print(f"  zvec 服务 : {ZVEC_URL}")
     print(f"  Ollama    : {OLLAMA_URL}")
+    print(f"  LLM 服务  : {LLM_URL} ({LLM_API})")
     print(f"  嵌入模型  : {EMBED_MODEL}")
     print(f"  生成模型  : {LLM_MODEL}")
 

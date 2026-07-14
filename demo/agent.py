@@ -10,7 +10,7 @@
 本模块实现：
   1. 本体层 — 将语料结构化为 Document + DocumentChunk 对象
   2. 工具层 — 4 个领域专用函数（search/read/list/prepare），各带 usage_prompt
-  3. Agent 循环 — Ollama 原生 tool calling，LLM 自主决策调用链
+  3. Agent 循环 — 支持 Ollama 原生与 OpenAI 兼容 tool calling（由 kb.LLM_API 决定），LLM 自主决策调用链
   4. 可追溯 — trace 记录每次工具调用的名称、参数、结果、耗时
   5. 引用约束 — 系统提示词要求回答标注来源 [document_id] title
   6. 错误守门 — 工具错误返回 {error: ...}，提示词要求不得掩盖失败
@@ -394,14 +394,118 @@ SYSTEM_PROMPT = """\
 # ====================================================================== #
 #  Agent 循环
 # ====================================================================== #
+def _build_llm_request(messages: list[dict], tools: list[dict]):
+    """根据 kb.LLM_API 构造请求，返回 (url, json_body, headers)。"""
+    body = {
+        "model": kb.LLM_MODEL,
+        "messages": messages,
+        "tools": tools,
+        "stream": False,
+    }
+    if kb.LLM_API == "openai":
+        headers = (
+            {"Authorization": f"Bearer {kb.LLM_API_KEY}"}
+            if kb.LLM_API_KEY else {}
+        )
+        return f"{kb.LLM_URL}/v1/chat/completions", body, headers
+    # 默认 Ollama 原生格式
+    return f"{kb.LLM_URL}/api/chat", body, {}
+
+
+def _parse_llm_response(data: dict):
+    """解析响应，返回 (content, tool_calls)。
+
+    tool_calls 归一化为 [{id, name, arguments(dict)}, ...]，
+    屏蔽 Ollama（arguments 为 dict）与 OpenAI（arguments 为 JSON 字符串）差异。
+    """
+    if kb.LLM_API == "openai":
+        msg = data["choices"][0]["message"]
+    else:
+        msg = data["message"]
+
+    content = msg.get("content") or ""
+    raw_calls = msg.get("tool_calls") or []
+    tool_calls = []
+    for tc in raw_calls:
+        fn = tc.get("function", {})
+        args = fn.get("arguments", {})
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except (ValueError, TypeError):
+                args = {}
+        if not isinstance(args, dict):
+            args = {}
+        tool_calls.append({
+            "id": tc.get("id", ""),
+            "name": fn.get("name", ""),
+            "arguments": args,
+        })
+    return content, tool_calls
+
+
+def _to_provider_messages(messages: list[dict]) -> list[dict]:
+    """将归一化消息转换为当前 LLM_API 所需的请求格式。"""
+    out = []
+    for m in messages:
+        role = m["role"]
+        if role == "assistant" and m.get("tool_calls"):
+            if kb.LLM_API == "openai":
+                out.append({
+                    "role": "assistant",
+                    "content": m.get("content") or "",
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["arguments"], ensure_ascii=False),
+                            },
+                        }
+                        for tc in m["tool_calls"]
+                    ],
+                })
+            else:
+                out.append({
+                    "role": "assistant",
+                    "content": m.get("content") or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.get("id", ""),
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": tc["arguments"],
+                            },
+                        }
+                        for tc in m["tool_calls"]
+                    ],
+                })
+        elif role == "tool":
+            if kb.LLM_API == "openai":
+                out.append({
+                    "role": "tool",
+                    "tool_call_id": m["tool_call_id"],
+                    "content": m["content"],
+                })
+            else:
+                out.append({"role": "tool", "content": m["content"]})
+        else:
+            out.append({"role": role, "content": m.get("content", "")})
+    return out
+
+
 def run_agent(question: str, max_iterations: int = 6) -> dict:
     """运行 OAG Agent：LLM 选择工具 → runtime 执行 → LLM 整合结果。
+
+    兼容 Ollama 原生与 OpenAI 兼容两种接口（由 kb.LLM_API 决定）。
 
     返回 {"answer": str, "trace": [...], "iterations": int, "elapsed": float}
     """
     if not DOCUMENTS:
         build_ontology()
 
+    # 归一化消息：tool_calls 用 {id, name, arguments}，tool 结果用 {tool_call_id, content}
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": question},
@@ -410,33 +514,30 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
     start_time = time.time()
 
     for i in range(max_iterations):
-        # 调用 Ollama（带 tools 参数）
-        r = requests.post(f"{kb.OLLAMA_URL}/api/chat", json={
-            "model": kb.LLM_MODEL,
-            "messages": messages,
-            "tools": TOOL_DEFS,
-            "stream": False,
-        }, timeout=120)
+        url, body, headers = _build_llm_request(
+            _to_provider_messages(messages), TOOL_DEFS
+        )
+        r = requests.post(url, json=body, headers=headers, timeout=120)
 
         if r.status_code != 200:
             raise kb.KBError(
-                f"Ollama 调用失败 (模型 {kb.LLM_MODEL}): ({r.status_code}) {r.text[:200]}",
+                f"LLM 调用失败 (模型 {kb.LLM_MODEL}): ({r.status_code}) {r.text[:200]}",
                 r.status_code,
             )
 
-        msg = r.json()["message"]
-        tool_calls = msg.get("tool_calls")
+        content, tool_calls = _parse_llm_response(r.json())
 
         if tool_calls:
             # 保留 assistant 消息（含 tool_calls）到对话历史
-            messages.append(msg)
+            messages.append({
+                "role": "assistant",
+                "content": content,
+                "tool_calls": tool_calls,
+            })
 
             for tc in tool_calls:
-                fn = tc.get("function", {})
-                tool_name = fn.get("name", "")
-                tool_args = fn.get("arguments", {})
-                if not isinstance(tool_args, dict):
-                    tool_args = {}
+                tool_name = tc["name"]
+                tool_args = tc["arguments"]
 
                 # 确定性 runtime 执行工具
                 tool_fn = TOOL_FUNCTIONS.get(tool_name)
@@ -458,14 +559,16 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
                     "duration": duration,
                 })
 
-                # 将工具结果送回 LLM
+                # 将工具结果送回 LLM（OpenAI 需要 tool_call_id 关联）
                 messages.append({
                     "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "name": tool_name,
                     "content": json.dumps(result, ensure_ascii=False),
                 })
         else:
             # LLM 生成最终回答
-            answer = msg.get("content", "")
+            answer = content
             return {
                 "answer": answer,
                 "trace": trace,

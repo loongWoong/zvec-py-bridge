@@ -126,7 +126,10 @@ def get_config():
         "zvec_url": kb.ZVEC_URL,
         "ollama_url": kb.OLLAMA_URL,
         "embed_model": kb.EMBED_MODEL,
+        "llm_url": kb.LLM_URL,
+        "llm_api": kb.LLM_API,
         "llm_model": kb.LLM_MODEL,
+        "ocr_url": kb.OCR_URL,
         "ocr_model": kb.OCR_MODEL,
         "collection": kb.COLLECTION_NAME,
         "corpus_size": len(kb.CORPUS),
@@ -143,6 +146,8 @@ def get_status():
         "zvec_version": health["zvec_version"],
         "ollama": health["ollama"],
         "has_embed_model": health["has_embed_model"],
+        "llm": health["llm"],
+        "llm_api": kb.LLM_API,
         "kb_initialized": _state["initialized"],
         "dimension": _state["dimension"],
         "doc_count": _state["doc_count"],
@@ -399,4 +404,5 @@ if __name__ == "__main__":
     print(f"  访问地址: http://localhost:{port}")
     print(f"  zvec 服务: {kb.ZVEC_URL}")
     print(f"  Ollama   : {kb.OLLAMA_URL}")
+    print(f"  LLM 服务 : {kb.LLM_URL} ({kb.LLM_API})")
     uvicorn.run(app, host=host, port=port)
