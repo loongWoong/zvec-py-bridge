@@ -54,9 +54,10 @@ python app.py
 
 | 视图 | 能力 |
 |------|------|
-| **文档库** | 浏览/搜索文档，查看全文与关系邻接，导出 Markdown |
-| **知识图谱** | 全局图可视化（文档/实体/标签为节点，关系为边），按类型过滤 |
-| **问答** | LLM Agent 通过 Wiki Runtime Tool 自主检索并回答，带可追溯 trace |
+| **文档库** | 浏览/搜索文档，查看全文与关系邻接，导出 Markdown，编译文档（raw→Wiki），版本历史 |
+| **知识图谱** | 全局图可视化（文档/实体/标签为节点，关系为边），按类型过滤，图查询（最短路径/共同邻居/知识血缘/度中心性） |
+| **元数据** | 浏览主题、标签树、实体列表、原始资料（RawSource） |
+| **问答** | LLM Agent 通过 Wiki Runtime Tool 自主检索并回答，带可追溯 trace，热门文档排行 |
 
 ### 四路融合检索
 
@@ -103,18 +104,43 @@ python app.py
 | PUT | `/api/documents/{id}` | 更新文档（自动存版本） |
 | DELETE | `/api/documents/{id}` | 删除文档 |
 | GET | `/api/documents/{id}/export` | 导出 Markdown |
-| GET | `/api/documents/{id}/versions` | 版本历史 |
+| GET | `/api/documents/{id}/versions` | 版本历史（离散快照） |
+| GET | `/api/documents/{id}/version-chain` | 完整版本链（previous_version 边遍历） |
+| GET | `/api/documents/{id}/related` | 相关文章 |
+| GET | `/api/documents/{id}/lineage` | 知识血缘（上下游知识链） |
+| GET | `/api/documents/{id}/conversations` | 文档关联对话记录 |
+| POST | `/api/documents/{id}/link-raw` | 关联文档与 raw 源 |
+| POST | `/api/documents/{id}/build-graph` | 对文档抽取实体并建图边 |
+| POST | `/api/documents/merge` | 合并两篇文档 |
+| POST | `/api/documents/update-metadata` | 更新文档元数据 |
+| GET | `/api/graph/full` | 全图数据（D3 渲染） |
+| GET | `/api/graph/stats` | 全图统计 |
+| GET | `/api/graph/central` | 度中心性排行 |
 | GET | `/api/graph/{id}` | 图邻接遍历 |
 | GET | `/api/graph/{id}/subtree` | 局部子图 |
+| GET | `/api/graph/{id}/shortest-path` | BFS 最短路径 |
+| GET | `/api/graph/{id}/common` | 共同邻居 |
+| GET | `/api/graph/{id}/degree` | 度中心性 |
+| GET | `/api/graph/{id}/multi-hop` | 多跳邻接 |
 | GET | `/api/topics` `/api/tags` `/api/entities` | 元数据列表 |
+| GET | `/api/entities/{name}` | 实体查询（含被哪些文档提及） |
+| GET | `/api/entities/{name}/co-occurrence` | 实体共现分析 |
+| GET | `/api/raws` | raw 源列表 |
+| GET | `/api/raws/{id}` | 获取单个 raw 源 |
+| POST | `/api/raws` | 创建 raw 源 |
+| GET | `/api/archives` | archive 文档列表 |
+| POST | `/api/archives` | 创建 archive 文档 |
+| GET | `/api/conversations/hot` | 热门文档排行（被问得最多） |
+| POST | `/api/conversations` | 记录对话到 Memory Graph |
 | GET | `/api/search?q=...` | 四路融合检索 |
-| POST | `/api/ask` | Agent 问答 |
+| POST | `/api/search` | 四路融合检索（POST） |
+| POST | `/api/ask` | Agent 问答（自动记录对话） |
 | POST | `/api/compile` | LLM 编译文档 |
 | POST | `/api/extract` | LLM 抽取实体 |
 
 ## 种子数据
 
-启动时若库为空，自动灌入 10 篇 LLM 主题文档（Transformer/Attention/BERT/RAG/Embedding/向量数据库/HNSW/Agent/Prompt/Fine-tuning），含 topic、tag 层级、entity 节点、关系边，并向量入库。
+启动时若库为空，自动灌入 10 篇 LLM 主题文档（Transformer/Attention/BERT/RAG/Embedding/向量数据库/HNSW/Agent/Prompt/Fine-tuning），含 topic、tag 层级、entity 节点、关系边，2 条 raw 源（关联到 Transformer 和 RAG），并向量入库。
 
 ## 文件结构
 

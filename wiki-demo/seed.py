@@ -381,6 +381,42 @@ DOCUMENTS = [
 
 
 # ====================================================================== #
+#  Raw 种子数据（对应 design.md 第一节：RawSource 对象 + Markdown 镜像）
+#  每条 raw 关联到一篇 wiki 文档（通过 references + updated_by 边）
+# ====================================================================== #
+RAW_SOURCES = [
+    {
+        "key": "attention_is_all_you_need",
+        "url": "https://arxiv.org/abs/1706.03762",
+        "author": "Vaswani et al.",
+        "published": "2017-06-12",
+        "content": (
+            "Attention Is All You Need. Ashish Vaswani, Noam Shazeer, Niki Parmar, "
+            "Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, Illia Polosukhin. "
+            "2017. 提出了 Transformer 架构，完全基于注意力机制，摒弃了 RNN 和 CNN。"
+            "核心公式：Attention(Q,K,V) = softmax(QK^T/√d_k)V。"
+            "在机器翻译任务上取得了 SOTA 结果，且训练效率显著提升。"
+        ),
+        "linked_doc": "transformer",
+    },
+    {
+        "key": "rag_paper",
+        "url": "https://arxiv.org/abs/2005.11401",
+        "author": "Lewis et al.",
+        "published": "2020-05-23",
+        "content": (
+            "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. "
+            "Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, "
+            "et al. 2020. 提出 RAG 框架，将预训练的检索器与生成器结合。"
+            "检索器从外部知识库召回相关文档，生成器基于检索结果生成回答。"
+            "在开放域问答和知识密集型任务上表现优异。"
+        ),
+        "linked_doc": "rag",
+    },
+]
+
+
+# ====================================================================== #
 #  入库逻辑
 # ====================================================================== #
 def _chunk_document(doc: dict) -> list[dict]:
@@ -446,6 +482,15 @@ def seed_all_sync() -> dict:
         )
         all_chunks.extend(_chunk_document(doc))
 
+    # 4. 灌入 raw 源 + 建立 references/updated_by 边（design §1/§7）
+    for raw in RAW_SOURCES:
+        wr.create_raw(
+            url=raw["url"], author=raw["author"],
+            published=raw["published"], content=raw["content"],
+            raw_key=raw["key"],
+        )
+        wr.link_raw(raw["linked_doc"], raw["key"])
+
     st = wr.stats()
     return {
         "skipped": False,
@@ -453,6 +498,7 @@ def seed_all_sync() -> dict:
         "topics": st["topics"],
         "tags": st["tags"],
         "entities": st["entities"],
+        "raws": st["raws"],
         "chunks": all_chunks,  # 返回 chunk 列表，供 seed_vectors 使用
     }
 

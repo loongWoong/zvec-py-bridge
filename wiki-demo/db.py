@@ -58,6 +58,19 @@ DEFINE FIELD summary   ON version TYPE option<string>;
 DEFINE FIELD version   ON version TYPE int;
 DEFINE FIELD snapshot  ON version TYPE datetime DEFAULT time::now();
 
+-- ─────────── 对象表（design §1 ArchiveDocument + §8 Conversation） ───────────
+
+DEFINE TABLE archive SCHEMALESS;
+DEFINE FIELD title    ON archive TYPE string;
+DEFINE FIELD content  ON archive TYPE string;
+DEFINE FIELD source   ON archive TYPE option<string>;
+DEFINE FIELD archived ON archive TYPE datetime DEFAULT time::now();
+
+DEFINE TABLE conversation SCHEMALESS;
+DEFINE FIELD question ON conversation TYPE string;
+DEFINE FIELD answer   ON conversation TYPE option<string>;
+DEFINE FIELD created  ON conversation TYPE datetime DEFAULT time::now();
+
 -- ─────────── 图关系边表（TYPE RELATION） ───────────
 -- document → topic
 DEFINE TABLE belongs_to  TYPE RELATION FROM document TO topic SCHEMALESS;
@@ -76,12 +89,31 @@ DEFINE TABLE implements TYPE RELATION FROM document TO document SCHEMALESS;
 DEFINE TABLE contradicts TYPE RELATION FROM document TO document SCHEMALESS;
 DEFINE TABLE supersedes TYPE RELATION FROM document TO document SCHEMALESS;
 
+-- design §6 补全：额外文档间关系
+DEFINE TABLE duplicates    TYPE RELATION FROM document TO document SCHEMALESS;
+DEFINE TABLE same_topic    TYPE RELATION FROM document TO document SCHEMALESS;
+DEFINE TABLE derived_from  TYPE RELATION FROM document TO document SCHEMALESS;
+
+-- document → archive（归档关系）
+DEFINE TABLE archived_from TYPE RELATION FROM document TO archive SCHEMALESS;
+
 -- tag → tag（标签层级）
 DEFINE TABLE child_of   TYPE RELATION FROM tag TO tag SCHEMALESS;
 -- entity → entity（实体间关系）
 DEFINE TABLE entity_related TYPE RELATION FROM entity TO entity SCHEMALESS;
 -- version → version（版本链）
 DEFINE TABLE previous_version TYPE RELATION FROM version TO version SCHEMALESS;
+
+-- design §7 知识血缘：document → raw（文档由哪个 raw 更新）
+DEFINE TABLE updated_by TYPE RELATION FROM document TO raw SCHEMALESS;
+
+-- design §8 LLM Memory Graph：conversation → document（对话关于哪个文档）
+DEFINE TABLE about TYPE RELATION FROM conversation TO document SCHEMALESS;
+
+-- ─────────── 全文检索索引（design §9） ───────────
+DEFINE ANALYZER IF NOT EXISTS simple_bm25 TOKENIZERS blank, class FILTERS lowercase;
+DEFINE INDEX IF NOT EXISTS doc_search ON document FIELDS title, content, summary
+    SEARCH ANALYZER simple_bm25 BM25 HIGHLIGHTS;
 """
 
 
@@ -101,8 +133,10 @@ def init() -> Surreal:
 
     # 执行 Schema（逐条执行，单条失败不中断整体——例如 ANALYZER 已存在）
     for stmt in SCHEMA_SQL.split(";"):
-        stmt = stmt.strip()
-        if not stmt or stmt.startswith("--"):
+        # 去掉行内注释（-- 开头的行），只保留实际 SQL
+        lines = [line for line in stmt.split("\n") if not line.strip().startswith("--")]
+        stmt = "\n".join(lines).strip()
+        if not stmt:
             continue
         try:
             db.query(stmt + ";")

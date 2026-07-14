@@ -218,6 +218,32 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 /* ── Empty ── */
 .empty { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
 .empty .icon { font-size: 32px; margin-bottom: 12px; }
+/* ── Metadata view ── */
+.metadata-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; }
+.metadata-section h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+.meta-list { display: flex; flex-direction: column; gap: 6px; }
+.meta-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; cursor: pointer; transition: border-color 0.2s var(--ease); }
+.meta-item:hover { border-color: var(--border-strong); }
+.meta-item .meta-name { font-weight: 500; font-size: 13px; }
+.meta-item .meta-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.meta-item .meta-type { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.meta-item .meta-indent { margin-left: 20px; }
+/* ── Compile box ── */
+.compile-box { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
+.compile-box h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+/* ── Version timeline ── */
+.version-timeline { margin-top: 16px; padding: 12px 16px; background: var(--surface-sunken); border-radius: var(--radius); }
+.version-timeline h4 { font-size: 13px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary); }
+.version-item { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); display: flex; justify-content: space-between; }
+.version-item:last-child { border-bottom: none; }
+.version-item .ver-num { font-weight: 600; color: var(--blue-fg); }
+.version-item .ver-current { color: var(--green-fg); font-weight: 600; }
+/* ── Hot docs ── */
+.hot-docs { margin-top: 24px; }
+.hot-docs h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+.hot-doc-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s var(--ease); }
+.hot-doc-item:hover { border-color: var(--border-strong); }
+.hot-doc-item .hot-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
 </style>
 </head>
 <body>
@@ -241,6 +267,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
   <div class="tabs">
     <button class="tab active" data-tab="library">文档库</button>
     <button class="tab" data-tab="graph">知识图谱</button>
+    <button class="tab" data-tab="metadata">元数据</button>
     <button class="tab" data-tab="ask">问答</button>
   </div>
 
@@ -255,6 +282,19 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     <div id="search-results-container" style="display:none;">
       <div class="routes-summary" id="routes-summary"></div>
       <div class="search-results" id="search-results"></div>
+    </div>
+    <div id="compile-container" style="display:none;">
+      <div class="compile-box">
+        <h3>编译文档（raw → Wiki）</h3>
+        <input type="text" id="compile-title" placeholder="建议标题（可选）" style="width:100%;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;">
+        <input type="text" id="compile-topic" placeholder="主题（可选，如 machine_learning）" style="width:100%;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;">
+        <textarea id="compile-content" placeholder="粘贴原始资料…" style="width:100%;min-height:200px;margin-bottom:8px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius);font-family:var(--font-sans);font-size:14px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:8px;">
+          <button class="back-btn" onclick="doCompile()">编译并创建</button>
+          <button class="back-btn" onclick="toggleCompile()">取消</button>
+        </div>
+        <div id="compile-result" style="margin-top:12px;"></div>
+      </div>
     </div>
     <div id="doc-list">
       <div class="loading">加载文档</div>
@@ -272,6 +312,33 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="layout-btn" data-layout="radial">环形聚焦</button>
           <button class="layout-btn" data-layout="cluster">类型聚类</button>
         </div>
+        <button class="layout-btn" onclick="toggleGraphQuery()" id="gq-toggle-btn">图查询 ▸</button>
+      </div>
+      <div id="graph-query-panel" style="display:none;background:var(--surface-sunken);padding:12px 16px;border-radius:var(--radius);margin-bottom:8px;font-size:13px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-weight:500;display:block;margin-bottom:4px;">最短路径</label>
+            <input type="text" id="gq-path-src" placeholder="源节点 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <input type="text" id="gq-path-dst" placeholder="目标节点 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <button class="layout-btn" onclick="runShortestPath()">查询</button>
+          </div>
+          <div>
+            <label style="font-weight:500;display:block;margin-bottom:4px;">共同邻居</label>
+            <input type="text" id="gq-common-a" placeholder="节点 A" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <input type="text" id="gq-common-b" placeholder="节点 B" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <button class="layout-btn" onclick="runCommonNeighbors()">查询</button>
+          </div>
+          <div>
+            <label style="font-weight:500;display:block;margin-bottom:4px;">知识血缘</label>
+            <input type="text" id="gq-lineage" placeholder="文档 ID" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;">
+            <button class="layout-btn" onclick="runLineage()">查询</button>
+          </div>
+          <div>
+            <label style="font-weight:500;display:block;margin-bottom:4px;">度中心性排行</label>
+            <button class="layout-btn" onclick="runCentral()">Top 10</button>
+          </div>
+        </div>
+        <div id="gq-result" style="margin-top:8px;padding:8px;background:var(--surface);border-radius:4px;min-height:40px;font-family:var(--font-mono);font-size:12px;max-height:200px;overflow-y:auto;"></div>
       </div>
       <div class="graph-controls">
         <div class="filter-group">
@@ -310,6 +377,29 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
         <button id="ask-btn" onclick="doAsk()">提问</button>
       </div>
       <div id="ask-result"></div>
+      <div id="hot-docs-container" style="margin-top:32px;"></div>
+    </div>
+  </div>
+
+  <!-- ── Metadata view ── -->
+  <div class="view" id="view-metadata">
+    <div class="metadata-grid">
+      <div class="metadata-section">
+        <h3>主题（Topics）</h3>
+        <div id="topic-list" class="meta-list"><div class="loading">加载</div></div>
+      </div>
+      <div class="metadata-section">
+        <h3>标签（Tags）</h3>
+        <div id="tag-list" class="meta-list"><div class="loading">加载</div></div>
+      </div>
+      <div class="metadata-section">
+        <h3>实体（Entities）</h3>
+        <div id="entity-list" class="meta-list"><div class="loading">加载</div></div>
+      </div>
+      <div class="metadata-section">
+        <h3>原始资料（Raw Sources）</h3>
+        <div id="raw-list" class="meta-list"><div class="loading">加载</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -326,9 +416,11 @@ document.querySelectorAll('.tab').forEach(t => {
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.tab).classList.add('active');
-    // search bar only for library
-    document.getElementById('search-bar').style.display = t.dataset.tab === 'ask' ? 'none' : 'flex';
+    // search bar only for library + graph
+    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata') ? 'none' : 'flex';
     if (t.dataset.tab === 'graph') renderGraph();
+    if (t.dataset.tab === 'metadata') loadMetadata();
+    if (t.dataset.tab === 'ask') loadHotDocs();
   });
 });
 
@@ -371,7 +463,9 @@ function renderDocList(docs) {
     el.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无文档</div>';
     return;
   }
-  el.innerHTML = '<div class="doc-grid">' + docs.map(doc => {
+  const compileBtn = document.getElementById('status-llm').classList.contains('ok')
+    ? `<div style="margin-bottom:16px;"><button class="back-btn" onclick="toggleCompile()">+ 编译文档</button></div>` : '';
+  el.innerHTML = compileBtn + '<div class="doc-grid">' + docs.map(doc => {
     const tags = (doc.out_edges || []).filter(e => e.edge_type === 'has_tag')
       .map(e => `<span class="tag">${e.node.split(':').pop()}</span>`).join('');
     const topic = (doc.out_edges || []).filter(e => e.edge_type === 'belongs_to')
@@ -415,11 +509,13 @@ async function showDocDetail(docId) {
         <h2>${esc(doc.title)}</h2>
         ${doc.summary ? `<div class="summary">${esc(doc.summary)}</div>` : ''}
         <div class="content">${content}</div>
-        <div style="margin-top:24px;display:flex;gap:8px;">
+        <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="back-btn" onclick="exportDoc('${doc.id}')">导出 Markdown</button>
+          <button class="back-btn" onclick="showVersionChain('${doc.id}')">版本历史</button>
           ${document.getElementById('status-llm').classList.contains('ok')
             ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>` : ''}
         </div>
+        <div id="version-chain-container"></div>
         ${relHtml}
       </div>`;
   } catch (e) {
@@ -886,6 +982,213 @@ async function doAsk() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ── Compile document ──
+function toggleCompile() {
+  const el = document.getElementById('compile-container');
+  const docList = document.getElementById('doc-list');
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  docList.style.display = isHidden ? 'none' : 'block';
+  if (!isHidden) document.getElementById('compile-result').innerHTML = '';
+}
+async function doCompile() {
+  const content = document.getElementById('compile-content').value.trim();
+  if (!content) { alert('请输入原始资料'); return; }
+  const titleHint = document.getElementById('compile-title').value.trim() || null;
+  const topic = document.getElementById('compile-topic').value.trim() || null;
+  const el = document.getElementById('compile-result');
+  el.innerHTML = '<div class="loading">LLM 编译中</div>';
+  try {
+    const r = await fetch(API + '/api/compile', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({raw_content: content, topic: topic, title_hint: titleHint}),
+    });
+    if (!r.ok) { const e = await r.json(); el.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(e.detail || '编译失败')}</div>`; return; }
+    const d = await r.json();
+    el.innerHTML = `<div style="color:var(--green-fg)">✓ 编译成功：${esc(d.document.title)}</div>`;
+    setTimeout(() => { toggleCompile(); loadDocs(); }, 1500);
+  } catch (e) { el.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(String(e))}</div>`; }
+}
+
+// ── Version chain ──
+async function showVersionChain(docId) {
+  const container = document.getElementById('version-chain-container');
+  container.innerHTML = '<div class="loading">加载版本链</div>';
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/version-chain`);
+    const d = await r.json();
+    const chain = d.chain || [];
+    if (!chain.length) {
+      container.innerHTML = '<div class="version-timeline"><h4>版本历史</h4><div style="color:var(--text-tertiary);font-size:12px;">无历史版本</div></div>';
+      return;
+    }
+    container.innerHTML = `<div class="version-timeline"><h4>版本历史 (${chain.length})</h4>
+      ${chain.map(v => `<div class="version-item">
+        <span><span class="ver-num">v${v.version}</span> ${esc(v.title)}</span>
+        <span>${v.current ? '<span class="ver-current">当前</span> ' : ''}${esc(String(v.snapshot || '').slice(0, 19))}</span>
+      </div>`).join('')}
+    </div>`;
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--red-fg)">⚠ 加载失败</div>';
+  }
+}
+
+// ── Graph query panel ──
+function toggleGraphQuery() {
+  const el = document.getElementById('graph-query-panel');
+  const btn = document.getElementById('gq-toggle-btn');
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
+}
+async function runShortestPath() {
+  const src = document.getElementById('gq-path-src').value.trim();
+  const dst = document.getElementById('gq-path-dst').value.trim();
+  if (!src || !dst) { alert('请输入源节点和目标节点'); return; }
+  const el = document.getElementById('gq-result');
+  el.innerHTML = '<div class="loading">查询中</div>';
+  try {
+    const r = await fetch(API + `/api/graph/${encodeURIComponent(src)}/shortest-path?target=${encodeURIComponent(dst)}`);
+    const d = await r.json();
+    if (d.length === -1 || (d.path && !d.path.length)) {
+      el.innerHTML = '<span style="color:var(--red-fg)">未找到路径</span>';
+    } else {
+      el.innerHTML = `路径长度: ${d.length}<br>路径: ${d.path.map(p => esc(p)).join(' → ')}`;
+    }
+  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+}
+async function runCommonNeighbors() {
+  const a = document.getElementById('gq-common-a').value.trim();
+  const b = document.getElementById('gq-common-b').value.trim();
+  if (!a || !b) { alert('请输入两个节点'); return; }
+  const el = document.getElementById('gq-result');
+  el.innerHTML = '<div class="loading">查询中</div>';
+  try {
+    const r = await fetch(API + `/api/graph/${encodeURIComponent(a)}/common?other=${encodeURIComponent(b)}`);
+    const d = await r.json();
+    el.innerHTML = `共同邻居: ${d.count}<br>${(d.common || []).map(c => esc(c.label) + ' (' + c.type + ')').join('<br>')}`;
+  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+}
+async function runLineage() {
+  const docId = document.getElementById('gq-lineage').value.trim();
+  if (!docId) { alert('请输入文档 ID'); return; }
+  const el = document.getElementById('gq-result');
+  el.innerHTML = '<div class="loading">查询中</div>';
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/lineage`);
+    const d = await r.json();
+    el.innerHTML = `上游: ${d.upstream_count} · 下游: ${d.downstream_count}<br>节点: ${(d.nodes || []).map(n => esc(n.label)).join(', ')}<br>边: ${(d.edges || []).map(e => esc(e.from.split(':').pop()) + ' →(' + e.type + ')→ ' + esc(e.to.split(':').pop())).join('<br>')}`;
+  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+}
+async function runCentral() {
+  const el = document.getElementById('gq-result');
+  el.innerHTML = '<div class="loading">查询中</div>';
+  try {
+    const r = await fetch(API + '/api/graph/central?limit=10');
+    const d = await r.json();
+    el.innerHTML = '度中心性 Top 10:<br>' + (d.nodes || []).map((n, i) => `${i+1}. ${esc(n.label)} (${n.type}) 度=${n.degree}`).join('<br>');
+  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+}
+
+// ── Metadata view ──
+async function loadMetadata() {
+  loadTopics();
+  loadTagsMeta();
+  loadEntitiesMeta();
+  loadRawsMeta();
+}
+async function loadTopics() {
+  const el = document.getElementById('topic-list');
+  try {
+    const r = await fetch(API + '/api/topics');
+    const d = await r.json();
+    const topics = d.topics || [];
+    if (!topics.length) { el.innerHTML = '<div style="color:var(--text-tertiary);font-size:12px;">暂无</div>'; return; }
+    el.innerHTML = topics.map(t => `<div class="meta-item" onclick="searchMeta('${esc(t.name)}')">
+      <div class="meta-name">${esc(t.name)}</div>
+      <div class="meta-desc">${esc(t.description || '')}</div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red-fg)">加载失败</div>'; }
+}
+async function loadTagsMeta() {
+  const el = document.getElementById('tag-list');
+  try {
+    const r = await fetch(API + '/api/tags');
+    const d = await r.json();
+    const tags = d.tags || [];
+    if (!tags.length) { el.innerHTML = '<div style="color:var(--text-tertiary);font-size:12px;">暂无</div>'; return; }
+    // Build tree by parent
+    const byParent = {};
+    const roots = [];
+    tags.forEach(t => {
+      if (t.parent) {
+        if (!byParent[t.parent]) byParent[t.parent] = [];
+        byParent[t.parent].push(t);
+      } else {
+        roots.push(t);
+      }
+    });
+    const renderTag = (t, depth) => {
+      const indent = depth > 0 ? 'meta-indent' : '';
+      const children = (byParent[t.id] || []).map(c => renderTag(c, depth + 1)).join('');
+      return `<div class="meta-item ${indent}" onclick="searchMeta('${esc(t.name)}')">
+        <div class="meta-name">${esc(t.name)}</div>
+      </div>${children}`;
+    };
+    el.innerHTML = roots.map(t => renderTag(t, 0)).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red-fg)">加载失败</div>'; }
+}
+async function loadEntitiesMeta() {
+  const el = document.getElementById('entity-list');
+  try {
+    const r = await fetch(API + '/api/entities');
+    const d = await r.json();
+    const ents = d.entities || [];
+    if (!ents.length) { el.innerHTML = '<div style="color:var(--text-tertiary);font-size:12px;">暂无</div>'; return; }
+    el.innerHTML = ents.map(e => `<div class="meta-item" onclick="searchMeta('${esc(e.name)}')">
+      <div class="meta-name">${esc(e.name)}</div>
+      <div class="meta-type">${esc(e.type || '')}</div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red-fg)">加载失败</div>'; }
+}
+async function loadRawsMeta() {
+  const el = document.getElementById('raw-list');
+  try {
+    const r = await fetch(API + '/api/raws');
+    const d = await r.json();
+    const raws = d.raws || [];
+    if (!raws.length) { el.innerHTML = '<div style="color:var(--text-tertiary);font-size:12px;">暂无</div>'; return; }
+    el.innerHTML = raws.map(r => `<div class="meta-item">
+      <div class="meta-name">${esc(r.author || '未知作者')}</div>
+      <div class="meta-desc">${esc(r.url || '')}</div>
+      <div class="meta-type">${esc((r.content || '').slice(0, 60))}</div>
+    </div>`).join('');
+  } catch (e) { el.innerHTML = '<div style="color:var(--red-fg)">加载失败</div>'; }
+}
+function searchMeta(term) {
+  // Switch to library tab and search
+  document.querySelector('.tab[data-tab=library]').click();
+  document.getElementById('search-input').value = term;
+  doSearch();
+}
+
+// ── Hot documents ──
+async function loadHotDocs() {
+  const el = document.getElementById('hot-docs-container');
+  try {
+    const r = await fetch(API + '/api/conversations/hot?limit=10');
+    const d = await r.json();
+    const docs = d.documents || [];
+    if (!docs.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="hot-docs"><h3>热门文档（被问得最多）</h3>
+      ${docs.map(doc => `<div class="hot-doc-item" onclick="showDocDetail('${esc(doc.doc_id)}')">
+        <span>${esc(doc.title)}</span>
+        <span class="hot-count">${doc.question_count} 次提问</span>
+      </div>`).join('')}
+    </div>`;
+  } catch (e) { el.innerHTML = ''; }
 }
 
 // ── Helpers ──

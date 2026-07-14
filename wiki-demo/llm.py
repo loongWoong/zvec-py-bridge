@@ -382,6 +382,78 @@ TOOL_DEFS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "merge_document",
+            "description": (
+                "合并两篇文档为一篇新文档。创建合并后的新文档，建立 supersedes 边，"
+                "并将源文档标记为 archived。适用于发现重复内容时整合知识。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_id": {"type": "string", "description": "源文档 ID"},
+                    "target_id": {"type": "string", "description": "目标文档 ID"},
+                    "merged_title": {"type": "string", "description": "合并后文档标题"},
+                    "merged_content": {"type": "string", "description": "合并后文档内容（Markdown）"},
+                    "merged_summary": {"type": "string", "description": "合并后文档摘要"},
+                },
+                "required": ["source_id", "target_id", "merged_title", "merged_content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_metadata",
+            "description": (
+                "更新文档元数据（标签、实体、主题、作者）并重建对应图边。"
+                "适用于修正或补充文档的元数据信息。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_id": {"type": "string", "description": "文档 ID"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "标签列表"},
+                    "entities": {"type": "array", "items": {"type": "object"}, "description": "实体列表 [{name, type}]"},
+                    "topic": {"type": "string", "description": "主题 ID"},
+                    "author": {"type": "string", "description": "作者"},
+                },
+                "required": ["doc_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_graph",
+            "description": (
+                "对指定文档抽取实体和关系并建立图边。"
+                "适用于文档已有内容但尚未建立知识图谱连接时。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "doc_id": {"type": "string", "description": "文档 ID"},
+                },
+                "required": ["doc_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "hot_documents",
+            "description": "返回被用户问得最多的文档排行（基于对话记录统计）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "返回数量（默认10）", "default": 10},
+                },
+            },
+        },
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -393,6 +465,10 @@ TOOL_FUNCTIONS = {
     "entity_lookup": lambda name: wr.entity_lookup(name) or {"error": f"实体 {name} 不存在"},
     "topic_tree": lambda: {"topics": wr.topic_tree()},
     "tag_tree": lambda: {"tags": wr.tag_tree()},
+    "merge_document": lambda source_id, target_id, merged_title, merged_content, merged_summary=None: wr.merge_document(source_id, target_id, merged_title, merged_content, merged_summary),
+    "update_metadata": lambda doc_id, tags=None, entities=None, topic=None, author=None: wr.update_metadata(doc_id, tags, entities, topic, author),
+    "build_graph": lambda doc_id: wr.build_graph(doc_id),
+    "hot_documents": lambda limit=10: {"documents": wr.hot_documents(limit)},
 }
 
 AGENT_SYSTEM_PROMPT = """\
@@ -411,6 +487,10 @@ AGENT_SYSTEM_PROMPT = """\
 6. entity_lookup — 按名称查找实体，返回被哪些文档提及
 7. topic_tree — 列出所有主题
 8. tag_tree — 列出所有标签层级
+9. merge_document — 合并两篇重复文档为一篇新文档（建 supersedes 边，源文档标记 archived）
+10. update_metadata — 更新文档元数据（标签/实体/主题/作者）并重建图边
+11. build_graph — 对文档抽取实体和关系并建立图边
+12. hot_documents — 返回被用户问得最多的文档排行
 
 ## 引用要求（必须遵守）
 - 回答中必须标注来源：[doc_id] title
@@ -487,6 +567,24 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
                 })
         else:
             answer = _clean_answer(content)
+            # 记录对话到 Memory Graph（design §8）：从 trace 中提取引用的 doc_id
+            doc_ids: list[str] = []
+            for t in trace:
+                result = t.get("result", {})
+                if isinstance(result, dict):
+                    # search_documents 返回 results 列表
+                    for r in (result.get("results") or []):
+                        did = r.get("doc_id", "")
+                        if did and did not in doc_ids:
+                            doc_ids.append(did)
+                    # get_document 返回单个 doc
+                    did = result.get("id", "") or result.get("doc_id", "")
+                    if did and did not in doc_ids:
+                        doc_ids.append(did)
+            try:
+                wr.record_conversation(question, answer, doc_ids)
+            except Exception:
+                pass  # 记录失败不影响主流程
             return {
                 "answer": answer,
                 "trace": trace,

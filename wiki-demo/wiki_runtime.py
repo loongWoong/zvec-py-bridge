@@ -20,6 +20,34 @@ import zvec_client
 from db import get_db
 
 # ====================================================================== #
+#  边类型集中定义（避免多处硬编码列表不一致）
+#  对应 design.md 第二节（图结构）、第六节（Document Relation）
+# ====================================================================== #
+# 文档间语义关系边（design §6）
+_DOC_RELATION_TYPES = [
+    "related", "depends", "extends", "implements",
+    "contradicts", "supersedes", "duplicates", "same_topic", "derived_from",
+]
+# 文档 → 元数据/原始资料 边
+_DOC_META_TYPES = [
+    "belongs_to", "has_tag", "mentions", "references", "updated_by", "archived_from",
+]
+# 元数据节点间边
+_META_EDGE_TYPES = ["child_of", "entity_related"]
+# 版本链边
+_VERSION_EDGE_TYPES = ["previous_version"]
+# 对话 → 文档 边（design §8 LLM Memory Graph）
+_MEMORY_EDGE_TYPES = ["about"]
+# 全部边类型（用于全图遍历/统计）
+_ALL_EDGE_TYPES = (
+    _DOC_RELATION_TYPES + _DOC_META_TYPES + _META_EDGE_TYPES
+    + _VERSION_EDGE_TYPES + _MEMORY_EDGE_TYPES
+)
+# 全部节点表
+_ALL_TABLES = ["document", "entity", "tag", "topic", "raw", "archive", "conversation", "version"]
+
+
+# ====================================================================== #
 #  辅助
 # ====================================================================== #
 def _rid(table: str, key: str) -> str:
@@ -157,9 +185,7 @@ def _enrich_document(doc: dict) -> dict:
 
 def _collect_edges(rid: str, direction: str) -> list[dict]:
     """收集文档的出/入边关系。"""
-    edge_types = ["belongs_to", "has_tag", "mentions", "references",
-                  "related", "depends", "extends", "implements",
-                  "contradicts", "supersedes"]
+    edge_types = _DOC_META_TYPES + _DOC_RELATION_TYPES
     results: list[dict] = []
     arrow_out = "->" if direction == "out" else "<-"
     arrow_in = "->" if direction == "out" else "<-"
@@ -309,11 +335,7 @@ def _normalize_rid(node_id: str) -> str:
 def _single_hop_neighbors(rid: str, direction: str, edge_type: str | None) -> list[dict]:
     """单跳邻接查询（内部使用）。"""
     results: list[dict] = []
-    edge_types = [edge_type] if edge_type else [
-        "belongs_to", "has_tag", "mentions", "references",
-        "related", "depends", "extends", "implements",
-        "contradicts", "supersedes", "child_of", "entity_related",
-    ]
+    edge_types = [edge_type] if edge_type else _ALL_EDGE_TYPES
     for et in edge_types:
         if direction in ("out", "both"):
             try:
@@ -349,9 +371,10 @@ def _flatten(rows) -> list:
 
 
 def related_articles(doc_id: str) -> list[dict]:
-    """获取与文档相关的文章（related/extends/depends/implements 边）。"""
+    """获取与文档相关的文章（related/extends/depends/implements/supersedes 等边）。"""
     rid = doc_id if ":" in doc_id else _rid("document", doc_id)
-    rel_types = ["related", "extends", "depends", "implements", "supersedes"]
+    rel_types = ["related", "extends", "depends", "implements", "supersedes",
+                 "duplicates", "same_topic", "derived_from"]
     results: list[dict] = []
     for et in rel_types:
         for direction_arrow in ("->", "<-"):
@@ -485,8 +508,6 @@ def graph_subtree(node_id: str, depth: int = 2) -> dict:
 #  图查询算法（BFS/DFS/中心性/路径/共现/血缘）
 #  对应 design.md 图结构设计，提供多样的知识图谱查询能力
 # ====================================================================== #
-# 所有节点类型，用于全图遍历
-_ALL_TABLES = ["document", "entity", "tag", "topic"]
 
 
 def _get_node_label(rid: str) -> dict:
@@ -625,11 +646,7 @@ def graph_stats() -> dict:
         node_counts[table] = cnt
         total_nodes += cnt
 
-    edge_types = [
-        "belongs_to", "has_tag", "mentions", "references",
-        "related", "depends", "extends", "implements",
-        "contradicts", "supersedes", "child_of", "entity_related",
-    ]
+    edge_types = _ALL_EDGE_TYPES
     edge_counts: dict[str, int] = {}
     total_edges = 0
     for et in edge_types:
@@ -800,11 +817,7 @@ def graph_full() -> dict:
                 "summary": r.get("summary") or r.get("description") or "",
             })
 
-    edge_types = [
-        "belongs_to", "has_tag", "mentions", "references",
-        "related", "depends", "extends", "implements",
-        "contradicts", "supersedes", "child_of", "entity_related",
-    ]
+    edge_types = _ALL_EDGE_TYPES
     edges: list[dict] = []
     for et in edge_types:
         try:
@@ -894,7 +907,11 @@ def docs_by_tag(tag_key: str) -> list[dict]:
 #  Version Service（对应 design.md 第七节）
 # ====================================================================== #
 def save_version(doc_id: str) -> dict | None:
-    """保存文档当前版本快照。"""
+    """保存文档当前版本快照，并建立 previous_version 边形成版本链。
+
+    对应 design.md 第七节：Version Graph。每次更新时保存快照，
+    若存在上一版本则通过 previous_version 边链接，形成 v1→v2→v3 链条。
+    """
     rid = doc_id if ":" in doc_id else _rid("document", doc_id)
     doc = get_document(rid)
     if not doc:
@@ -915,6 +932,11 @@ def save_version(doc_id: str) -> dict | None:
         "content": doc.get("content", ""), "summary": doc.get("summary"),
         "ver": ver_num,
     })
+    # 建立 previous_version 边：当前版本 → 上一版本（形成版本链）
+    if ver_num > 1:
+        prev_ver_key = f"{rid.split(':')[-1]}_v{ver_num - 1}"
+        prev_ver_rid = _rid("version", prev_ver_key)
+        relate(ver_rid, "previous_version", prev_ver_rid)
     # 递增文档版本号
     _q(f"UPDATE {rid} SET version = $next", {"next": ver_num + 1})
     return {"version_id": ver_rid, "version": ver_num}
@@ -932,6 +954,56 @@ def list_versions(doc_id: str) -> list[dict]:
              "title": v.get("title", ""),
              "snapshot": str(v.get("snapshot", ""))}
             for v in vers if isinstance(v, dict)]
+
+
+def version_chain(doc_id: str) -> list[dict]:
+    """按 previous_version 边遍历，返回完整版本链（从最新到最旧）。
+
+    对应 design.md 第七节：Version Graph。与 list_versions() 不同，
+    本方法通过 previous_version 边遍历，反映真正的版本演进链。
+    """
+    rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    doc = get_document(rid)
+    if not doc:
+        return []
+    # 当前版本号 - 1 = 最新快照的 version 字段
+    current_ver = doc.get("version", 1)
+    chain: list[dict] = []
+    # 最新快照
+    latest_ver_key = f"{rid.split(':')[-1]}_v{current_ver - 1}" if current_ver > 1 else None
+    if not latest_ver_key:
+        # 只有一个版本，无历史链
+        return [{"version": 1, "title": doc.get("title", ""),
+                 "snapshot": str(doc.get("updated", "")), "current": True}]
+    # 从最新快照开始，沿 previous_version 边回溯
+    ver_rid = _rid("version", latest_ver_key)
+    visited: set[str] = set()
+    while ver_rid and ver_rid not in visited:
+        visited.add(ver_rid)
+        v = _q_one(f"SELECT * FROM {ver_rid}")
+        if not v or not isinstance(v, dict):
+            break
+        chain.append({
+            "id": _extract_id(v.get("id", "")),
+            "version": v.get("version", 0),
+            "title": v.get("title", ""),
+            "snapshot": str(v.get("snapshot", "")),
+        })
+        # 沿 previous_version 边回溯
+        try:
+            rows = _q(f"SELECT out AS prev FROM {ver_rid}->previous_version")
+            for r in _flatten(rows):
+                if isinstance(r, dict) and r.get("prev"):
+                    ver_rid = _extract_id(r["prev"])
+                    break
+            else:
+                break
+        except Exception:
+            break
+    # 标记当前文档版本
+    if chain:
+        chain[0]["current"] = False
+    return chain
 
 
 # ====================================================================== #
@@ -1019,11 +1091,37 @@ def search_documents(query: str, topk: int = 5) -> dict:
 
 
 def _fts_search(query: str, topk: int) -> list[dict]:
-    """全文检索：尝试 SEARCH 索引，降级为 CONTAINS 子串匹配。"""
+    """全文检索：优先使用 BM25 SEARCH 索引，降级为 CONTAINS 子串匹配。
+
+    对应 design.md 第九节 FullText 路。db.py 定义了 doc_search BM25 索引，
+    若 SDK/版本不支持 SEARCH 语法则自动降级到子串匹配，保证向后兼容。
+    """
     keywords = [w.strip() for w in re.split(r"[\s,，。、]+", query) if len(w.strip()) >= 2]
     if not keywords:
         return []
-    # 降级方案：CONTAINS 子串匹配（SurrealDB 用 string::lowercase 做大小写不敏感）
+
+    # ── 优先：BM25 全文检索索引 ──
+    try:
+        # SurrealQL SEARCH 语法：SEARCH '<query>' IN doc_search ON document
+        safe_query = query.replace("'", " ")
+        sql = f"SELECT id, title, content FROM SEARCH '{safe_query}' IN doc_search ON document LIMIT {topk}"
+        rows = _q(sql)
+        docs = _flatten(rows)
+        results = []
+        for d in docs:
+            if not isinstance(d, dict):
+                continue
+            results.append({
+                "doc_id": _extract_id(d.get("id", "")),
+                "title": d.get("title", ""),
+                "excerpt": (d.get("content", "") or "")[:120],
+            })
+        if results:
+            return results
+    except Exception:
+        pass  # 降级到 CONTAINS
+
+    # ── 降级：CONTAINS 子串匹配（大小写不敏感）──
     where_parts = " OR ".join(
         f"string::lowercase(title) CONTAINS string::lowercase('{k}') "
         f"OR string::lowercase(content) CONTAINS string::lowercase('{k}')"
@@ -1164,6 +1262,254 @@ def _metadata_search(query: str, topk: int) -> list[dict]:
 
 
 # ====================================================================== #
+#  RawSource Service（对应 design.md 第一节："raw 文档也是对象"）
+# ====================================================================== #
+def create_raw(url: str | None, author: str | None,
+               published: str | None, content: str,
+               raw_key: str | None = None) -> dict:
+    """创建 RawSource 对象。幂等：同 key 则更新。
+
+    对应 design.md 第一节：RawSource 是独立对象，Markdown 只是导出产物。
+    """
+    key = raw_key or re.sub(r"[^A-Za-z0-9_]", "_", (url or content[:30]).lower()).strip("_")
+    if not key:
+        key = f"raw_{int(time.time())}"
+    rid = _rid("raw", key)
+    # published 是字符串日期，转换为 SurrealDB datetime 字面量
+    published_clause = "type::datetime($published)" if published else "NONE"
+    _q(f"""
+        UPSERT {rid} SET
+            url = $url,
+            author = $author,
+            published = {published_clause},
+            content = $content,
+            collected = time::now()
+    """, {"url": url, "author": author, "published": published, "content": content})
+    return get_raw(rid) or {"id": rid, "url": url, "author": author}
+
+
+def get_raw(raw_id: str) -> dict | None:
+    """获取单个 raw 对象。"""
+    rid = raw_id if ":" in raw_id else _rid("raw", raw_id)
+    r = _q_one(f"SELECT * FROM {rid}")
+    if not r or not isinstance(r, dict):
+        return None
+    r["id"] = _extract_id(r.get("id", ""))
+    return r
+
+
+def list_raws() -> list[dict]:
+    """列出所有 raw 对象。"""
+    rows = _q("SELECT * FROM raw")
+    raws = _flatten(rows)
+    return [{"id": _extract_id(r.get("id", "")),
+             "url": r.get("url", ""),
+             "author": r.get("author", ""),
+             "content": (r.get("content", "") or "")[:120]}
+            for r in raws if isinstance(r, dict)]
+
+
+def link_raw(doc_id: str, raw_id: str) -> dict:
+    """关联文档与 raw：建立 references + updated_by 边。
+
+    对应 design.md 第七节：updated_by 关系（文档由哪个 raw 更新）。
+    """
+    doc_rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    raw_rid = raw_id if ":" in raw_id else _rid("raw", raw_id)
+    relate(doc_rid, "references", raw_rid)
+    relate(doc_rid, "updated_by", raw_rid)
+    return {"doc_id": doc_rid, "raw_id": raw_rid, "linked": True}
+
+
+# ====================================================================== #
+#  Archive Service（对应 design.md 第一节：ArchiveDocument 对象）
+# ====================================================================== #
+def create_archive(title: str, content: str, source: str | None = None) -> dict:
+    """创建 ArchiveDocument 对象。"""
+    key = re.sub(r"[^A-Za-z0-9_]", "_", title.lower()).strip("_") or f"arch_{int(time.time())}"
+    rid = _rid("archive", key)
+    _q(f"""
+        UPSERT {rid} SET
+            title = $title,
+            content = $content,
+            source = $source,
+            archived = time::now()
+    """, {"title": title, "content": content, "source": source})
+    return {"id": rid, "title": title, "source": source}
+
+
+def list_archives() -> list[dict]:
+    """列出所有 archive 对象。"""
+    rows = _q("SELECT * FROM archive")
+    archs = _flatten(rows)
+    return [{"id": _extract_id(a.get("id", "")),
+             "title": a.get("title", ""),
+             "source": a.get("source", ""),
+             "content": (a.get("content", "") or "")[:120]}
+            for a in archs if isinstance(a, dict)]
+
+
+# ====================================================================== #
+#  LLM Memory Graph Service（对应 design.md 第八节）
+#  Conversation → about → Document
+# ====================================================================== #
+def record_conversation(question: str, answer: str | None,
+                        doc_ids: list[str] | None = None) -> dict:
+    """记录一次对话，并建立 about 边指向相关文档。
+
+    对应 design.md 第八节：Query about Document。
+    以后可分析"哪些文档用户问得最多"。
+    """
+    key = f"conv_{int(time.time())}"
+    rid = _rid("conversation", key)
+    _q(f"""
+        UPSERT {rid} SET
+            question = $question,
+            answer = $answer,
+            created = time::now()
+    """, {"question": question, "answer": answer})
+    if doc_ids:
+        for did in doc_ids:
+            doc_rid = did if ":" in did else _rid("document", did)
+            relate(rid, "about", doc_rid)
+    return {"id": rid, "question": question, "linked_docs": len(doc_ids) if doc_ids else 0}
+
+
+def hot_documents(limit: int = 10) -> list[dict]:
+    """统计 about 边入度，返回被问得最多的文档排行。
+
+    对应 design.md 第八节："哪些文档用户问得最多"。
+    """
+    rows = _q(f"""
+        SELECT count() AS cnt, in AS doc FROM about GROUP BY doc
+        ORDER BY cnt DESC LIMIT {limit}
+    """)
+    result = []
+    for r in _flatten(rows):
+        if not isinstance(r, dict) or not r.get("doc"):
+            continue
+        doc_id = _extract_id(r["doc"])
+        doc = get_document(doc_id)
+        result.append({
+            "doc_id": doc_id,
+            "title": doc.get("title", "") if doc else "",
+            "question_count": r.get("cnt", 0),
+        })
+    return result
+
+
+def conversations_by_doc(doc_id: str) -> list[dict]:
+    """反查某文档关联的对话。"""
+    rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    rows = _q(f"SELECT in AS conv FROM {rid}<-about")
+    result = []
+    for r in _flatten(rows):
+        if not isinstance(r, dict) or not r.get("conv"):
+            continue
+        conv_id = _extract_id(r["conv"])
+        conv = _q_one(f"SELECT * FROM {conv_id}")
+        if conv and isinstance(conv, dict):
+            result.append({
+                "id": conv_id,
+                "question": conv.get("question", ""),
+                "answer": (conv.get("answer", "") or "")[:120],
+                "created": str(conv.get("created", "")),
+            })
+    return result
+
+
+# ====================================================================== #
+#  Agent 写入类工具（对应 design.md 第十一节：merge/update_metadata/build_graph）
+# ====================================================================== #
+def merge_document(source_id: str, target_id: str,
+                   merged_title: str, merged_content: str,
+                   merged_summary: str | None = None) -> dict:
+    """合并两篇文档：创建新文档，建 supersedes 边，将源文档标记为 archived。
+
+    对应 design.md 第十一节 merge_document() 工具。
+    """
+    source_rid = source_id if ":" in source_id else _rid("document", source_id)
+    target_rid = target_id if ":" in target_id else _rid("document", target_id)
+    # 创建合并后的新文档
+    merged = create_document(
+        title=merged_title, content=merged_content, summary=merged_summary,
+        doc_key=re.sub(r"[^A-Za-z0-9_]", "_", merged_title.lower()).strip("_") + "_merged",
+    )
+    merged_rid = merged.get("id", "")
+    if merged_rid:
+        # 新文档 supersedes 源文档和目标文档
+        relate(merged_rid, "supersedes", source_rid)
+        relate(merged_rid, "supersedes", target_rid)
+        # 源文档和目标文档标记为 archived
+        _q(f"UPDATE {source_rid} SET status = 'archived'")
+        _q(f"UPDATE {target_rid} SET status = 'archived'")
+    return {"merged_doc_id": merged_rid, "superseded": [source_rid, target_rid]}
+
+
+def update_metadata(doc_id: str, tags: list[str] | None = None,
+                    entities: list[dict] | None = None,
+                    topic: str | None = None,
+                    author: str | None = None) -> dict:
+    """更新文档元数据并重建 has_tag/mentions/belongs_to 边。
+
+    对应 design.md 第十一节 update_metadata() 工具。
+    """
+    rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    # 更新 author 字段
+    if author:
+        _q(f"UPDATE {rid} SET author = $author", {"author": author})
+    # 重建 topic 边
+    if topic:
+        _q(f"UPDATE {rid} SET topic_id = $topic", {"topic": topic})
+        relate(rid, "belongs_to", _rid("topic", topic))
+    # 重建 tag 边
+    if tags:
+        for tag_name in tags:
+            tag_key = re.sub(r"[^A-Za-z0-9_]", "_", tag_name.lower()).strip("_")
+            ensure_tag(tag_key, tag_name)
+            relate(rid, "has_tag", _rid("tag", tag_key))
+    # 重建 entity 边
+    if entities:
+        for ent in entities:
+            ent_name = ent["name"]
+            ent_key = re.sub(r"[^A-Za-z0-9_]", "_", ent_name.lower()).strip("_")
+            ensure_entity(ent_key, ent_name, ent.get("type"))
+            relate(rid, "mentions", _rid("entity", ent_key))
+    return get_document(rid) or {"id": rid, "updated": True}
+
+
+def build_graph(doc_id: str) -> dict:
+    """对文档抽取实体/关系并建图边。
+
+    对应 design.md 第十一节 build_graph() 工具。
+    委托 llm.extract_entities() 抽取，然后落库建边。
+    """
+    import llm  # 延迟导入避免循环依赖
+    rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    doc = get_document(rid)
+    if not doc:
+        return {"error": f"文档 {doc_id} 不存在"}
+    try:
+        result = llm.extract_entities(rid)
+    except llm.LLMError as e:
+        return {"error": f"抽取失败: {e}"}
+    # 落库：创建/更新实体 + mentions 边 + entity 间关系
+    for ent in result.get("entities", []):
+        ent_key = re.sub(r"[^A-Za-z0-9_]", "_", ent["name"].lower()).strip("_")
+        ensure_entity(ent_key, ent["name"], ent.get("type"))
+        relate(rid, "mentions", _rid("entity", ent_key))
+    for rel in result.get("relations", []):
+        from_key = re.sub(r"[^A-Za-z0-9_]", "_", rel["from"].lower()).strip("_")
+        to_key = re.sub(r"[^A-Za-z0-9_]", "_", rel["to"].lower()).strip("_")
+        relate(f"entity:{from_key}", "entity_related", f"entity:{to_key}")
+    return {
+        "doc_id": rid,
+        "entities_added": len(result.get("entities", [])),
+        "relations_added": len(result.get("relations", [])),
+    }
+
+
+# ====================================================================== #
 #  统计
 # ====================================================================== #
 def stats() -> dict:
@@ -1183,5 +1529,7 @@ def stats() -> dict:
         "tags": _count("tag"),
         "entities": _count("entity"),
         "raws": _count("raw"),
+        "archives": _count("archive"),
+        "conversations": _count("conversation"),
         "versions": _count("version"),
     }

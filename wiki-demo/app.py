@@ -183,6 +183,42 @@ class ExtractRequest(BaseModel):
     document_id: str
 
 
+class CreateRawRequest(BaseModel):
+    url: str | None = None
+    author: str | None = None
+    published: str | None = None
+    content: str
+    raw_key: str | None = None
+
+
+class CreateArchiveRequest(BaseModel):
+    title: str
+    content: str
+    source: str | None = None
+
+
+class ConversationRequest(BaseModel):
+    question: str
+    answer: str | None = None
+    doc_ids: list[str] | None = None
+
+
+class MergeDocumentRequest(BaseModel):
+    source_id: str
+    target_id: str
+    merged_title: str
+    merged_content: str
+    merged_summary: str | None = None
+
+
+class UpdateMetadataRequest(BaseModel):
+    doc_id: str
+    tags: list[str] | None = None
+    entities: list[dict] | None = None
+    topic: str | None = None
+    author: str | None = None
+
+
 # ====================================================================== #
 #  健康检查
 # ====================================================================== #
@@ -372,6 +408,105 @@ def entity_lookup(name: str):
 def entity_co_occurrence(name: str):
     """共现分析：与某实体共同出现在文档中的其他实体。"""
     return wr.entity_co_occurrence(name)
+
+
+# ====================================================================== #
+#  RawSource（对应 design.md 第一节：raw 文档也是对象）
+# ====================================================================== #
+@app.get("/api/raws")
+def list_raws():
+    """列出所有 raw 源。"""
+    return {"raws": wr.list_raws()}
+
+
+@app.get("/api/raws/{raw_id}")
+def get_raw(raw_id: str):
+    """获取单个 raw 源。"""
+    raw = wr.get_raw(raw_id)
+    if not raw:
+        raise HTTPException(404, f"raw {raw_id} 不存在")
+    return raw
+
+
+@app.post("/api/raws")
+def create_raw(req: CreateRawRequest):
+    """创建 raw 源。"""
+    return wr.create_raw(req.url, req.author, req.published, req.content, req.raw_key)
+
+
+@app.post("/api/documents/{doc_id}/link-raw")
+def link_raw(doc_id: str, raw_id: str):
+    """关联文档与 raw（建 references + updated_by 边）。"""
+    return wr.link_raw(doc_id, raw_id)
+
+
+# ====================================================================== #
+#  Archive（对应 design.md 第一节：ArchiveDocument）
+# ====================================================================== #
+@app.get("/api/archives")
+def list_archives():
+    """列出所有 archive 文档。"""
+    return {"archives": wr.list_archives()}
+
+
+@app.post("/api/archives")
+def create_archive(req: CreateArchiveRequest):
+    """创建 archive 文档。"""
+    return wr.create_archive(req.title, req.content, req.source)
+
+
+# ====================================================================== #
+#  Version Chain（对应 design.md 第七节）
+# ====================================================================== #
+@app.get("/api/documents/{doc_id}/version-chain")
+def version_chain(doc_id: str):
+    """完整版本链（通过 previous_version 边遍历）。"""
+    return {"chain": wr.version_chain(doc_id)}
+
+
+# ====================================================================== #
+#  LLM Memory Graph（对应 design.md 第八节）
+# ====================================================================== #
+@app.get("/api/conversations/hot")
+def hot_documents(limit: int = 10):
+    """热门文档排行：被问得最多的文档。"""
+    return {"documents": wr.hot_documents(limit)}
+
+
+@app.get("/api/documents/{doc_id}/conversations")
+def doc_conversations(doc_id: str):
+    """文档关联的对话记录。"""
+    return {"conversations": wr.conversations_by_doc(doc_id)}
+
+
+@app.post("/api/conversations")
+def record_conversation(req: ConversationRequest):
+    """记录一次对话到 Memory Graph。"""
+    return wr.record_conversation(req.question, req.answer, req.doc_ids)
+
+
+# ====================================================================== #
+#  Agent 写入类工具（对应 design.md 第十一节）
+# ====================================================================== #
+@app.post("/api/documents/merge")
+def merge_document(req: MergeDocumentRequest):
+    """合并两篇文档。"""
+    return wr.merge_document(req.source_id, req.target_id,
+                             req.merged_title, req.merged_content, req.merged_summary)
+
+
+@app.post("/api/documents/update-metadata")
+def update_metadata(req: UpdateMetadataRequest):
+    """更新文档元数据。"""
+    return wr.update_metadata(req.doc_id, req.tags, req.entities, req.topic, req.author)
+
+
+@app.post("/api/documents/{doc_id}/build-graph")
+def build_graph(doc_id: str):
+    """对文档抽取实体/关系并建图边。"""
+    if not _state["llm"]:
+        raise HTTPException(503, "LLM 服务不可达，无法构建图")
+    return wr.build_graph(doc_id)
 
 
 # ====================================================================== #
