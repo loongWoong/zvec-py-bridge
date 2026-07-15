@@ -472,8 +472,6 @@ def graph_subtree(node_id: str, depth: int = 2) -> dict:
     seen_edges: set[frozenset] = set()
 
     def _visit(current_rid: str, current_depth: int):
-        if current_depth < 0:
-            return
         if current_rid in nodes:
             return
         # 获取节点信息
@@ -486,6 +484,9 @@ def graph_subtree(node_id: str, depth: int = 2) -> dict:
             }
         else:
             nodes[current_rid] = {"id": current_rid, "label": current_rid, "type": "unknown"}
+
+        if current_depth < 0:
+            return
 
         nbrs = _single_hop_neighbors(current_rid, "both", None)
         for nb in nbrs:

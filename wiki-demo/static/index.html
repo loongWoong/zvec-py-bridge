@@ -190,6 +190,52 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .graph-link.highlight { opacity: 1; stroke-width: 2.5; }
 .graph-label { font-size: 10px; font-family: var(--font-sans); fill: var(--text-secondary); pointer-events: none; font-weight: 500; }
 .graph-edge-label { font-size: 8px; font-family: var(--font-mono); fill: var(--text-tertiary); pointer-events: none; }
+/* ── Graph query panel ── */
+.gq-tabs { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 12px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius); }
+.gq-tab { padding: 4px 10px; border: none; border-radius: 4px; background: transparent; color: var(--text-secondary); font-size: 11px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
+.gq-tab:hover { color: var(--text); background: var(--surface); }
+.gq-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.gq-panel { display: none; }
+.gq-panel.active { display: block; }
+.gq-form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.gq-field { display: flex; flex-direction: column; gap: 4px; min-width: 180px; flex: 1; }
+.gq-field label { font-size: 11px; font-weight: 500; color: var(--text-secondary); }
+.gq-param-select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
+.gq-run-btn { padding: 5px 16px; border: none; border-radius: 6px; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: opacity 0.2s var(--ease); white-space: nowrap; }
+.gq-run-btn:hover { opacity: 0.85; }
+.gq-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.gq-result { margin-top: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-height: 48px; max-height: 300px; overflow-y: auto; font-size: 12px; }
+.gq-result:empty::before { content: '选择查询类型并执行查询，结果将显示在此'; color: var(--text-tertiary); font-size: 12px; }
+/* 搜索下拉框 */
+.searchable-select { position: relative; }
+.ss-input { width: 100%; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 12px; font-family: var(--font-sans); background: var(--surface); color: var(--text); box-sizing: border-box; }
+.ss-input:focus { outline: none; border-color: var(--text-secondary); }
+.ss-dropdown { position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 50; display: none; }
+.ss-dropdown.show { display: block; }
+.ss-option { padding: 4px 8px; font-size: 12px; cursor: pointer; transition: background 0.1s; }
+.ss-option:hover, .ss-option.active { background: var(--surface-sunken); }
+.ss-option .ss-type { color: var(--text-tertiary); font-size: 10px; font-family: var(--font-mono); margin-left: 4px; }
+/* 结果卡片 */
+.gq-card { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; transition: border-color 0.2s var(--ease); }
+.gq-card:hover { border-color: var(--border-strong); }
+.gq-card .gq-card-title { font-weight: 600; font-size: 13px; color: var(--text); }
+.gq-card .gq-card-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.gq-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); font-weight: 500; margin-right: 4px; }
+.gq-badge.doc { background: var(--blue-bg); color: var(--blue-fg); }
+.gq-badge.entity { background: var(--purple-bg); color: var(--purple-fg); }
+.gq-badge.tag { background: var(--yellow-bg); color: var(--yellow-fg); }
+.gq-badge.topic { background: var(--green-bg); color: var(--green-fg); }
+.gq-badge.raw { background: var(--surface-sunken); color: var(--text-secondary); }
+.gq-badge.archive { background: var(--red-bg); color: var(--red-fg); }
+.gq-edge-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-family: var(--font-mono); background: var(--surface-sunken); color: var(--text-secondary); margin: 0 2px; }
+.gq-clickable { cursor: pointer; color: var(--blue-fg); text-decoration: underline; text-decoration-style: dotted; }
+.gq-clickable:hover { text-decoration-style: solid; }
+.gq-path-step { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 6px 0; }
+.gq-arrow { color: var(--text-tertiary); font-size: 14px; }
+.gq-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.gq-stat-item { background: var(--surface-sunken); border-radius: 6px; padding: 8px 12px; text-align: center; }
+.gq-stat-item .gq-stat-value { font-size: 20px; font-weight: 700; font-family: var(--font-mono); color: var(--text); }
+.gq-stat-item .gq-stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 /* ── Ask view ── */
 .ask-container { max-width: 800px; }
 .ask-input { display: flex; gap: 8px; margin-bottom: 24px; }
@@ -370,32 +416,139 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="layout-btn" data-layout="cluster">类型聚类</button>
         </div>
         <button class="layout-btn" onclick="toggleGraphQuery()" id="gq-toggle-btn">图查询 ▸</button>
+        <button class="layout-btn" onclick="resetGraph()" id="graph-reset-btn" style="display:none;">返回全图</button>
       </div>
       <div id="graph-query-panel" style="display:none;background:var(--surface-sunken);padding:12px 16px;border-radius:var(--radius);margin-bottom:8px;font-size:13px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <label style="font-weight:500;display:block;margin-bottom:4px;">最短路径</label>
-            <select id="gq-path-src" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
-            <select id="gq-path-dst" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
-            <button class="layout-btn" onclick="runShortestPath()">查询</button>
-          </div>
-          <div>
-            <label style="font-weight:500;display:block;margin-bottom:4px;">共同邻居</label>
-            <select id="gq-common-a" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
-            <select id="gq-common-b" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
-            <button class="layout-btn" onclick="runCommonNeighbors()">查询</button>
-          </div>
-          <div>
-            <label style="font-weight:500;display:block;margin-bottom:4px;">知识血缘</label>
-            <select id="gq-lineage" class="gq-select" style="width:100%;padding:4px 8px;border:1px solid var(--border-strong);border-radius:4px;font-size:12px;margin-bottom:4px;background:var(--surface);"></select>
-            <button class="layout-btn" onclick="runLineage()">查询</button>
-          </div>
-          <div>
-            <label style="font-weight:500;display:block;margin-bottom:4px;">度中心性排行</label>
-            <button class="layout-btn" onclick="runCentral()">Top 10</button>
+        <!-- 查询类型 Tab -->
+        <div class="gq-tabs">
+          <button class="gq-tab active" data-gq="path">最短路径</button>
+          <button class="gq-tab" data-gq="common">共同邻居</button>
+          <button class="gq-tab" data-gq="lineage">知识血缘</button>
+          <button class="gq-tab" data-gq="degree">节点度</button>
+          <button class="gq-tab" data-gq="multihop">多跳邻接</button>
+          <button class="gq-tab" data-gq="subtree">子图</button>
+          <button class="gq-tab" data-gq="cooccur">共现分析</button>
+          <button class="gq-tab" data-gq="central">中心性排行</button>
+          <button class="gq-tab" data-gq="stats">全图统计</button>
+        </div>
+
+        <!-- 最短路径 -->
+        <div class="gq-panel active" id="gq-panel-path">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>源节点</label>
+              <div class="searchable-select" data-target="gq-path-src"></div>
+            </div>
+            <div class="gq-field">
+              <label>目标节点</label>
+              <div class="searchable-select" data-target="gq-path-dst"></div>
+            </div>
+            <button class="gq-run-btn" onclick="runShortestPath()">查询路径</button>
           </div>
         </div>
-        <div id="gq-result" style="margin-top:8px;padding:8px;background:var(--surface);border-radius:4px;min-height:40px;font-family:var(--font-mono);font-size:12px;max-height:200px;overflow-y:auto;"></div>
+
+        <!-- 共同邻居 -->
+        <div class="gq-panel" id="gq-panel-common">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>节点 A</label>
+              <div class="searchable-select" data-target="gq-common-a"></div>
+            </div>
+            <div class="gq-field">
+              <label>节点 B</label>
+              <div class="searchable-select" data-target="gq-common-b"></div>
+            </div>
+            <button class="gq-run-btn" onclick="runCommonNeighbors()">查询</button>
+          </div>
+        </div>
+
+        <!-- 知识血缘 -->
+        <div class="gq-panel" id="gq-panel-lineage">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>文档</label>
+              <div class="searchable-select" data-target="gq-lineage" data-filter="document"></div>
+            </div>
+            <div class="gq-field">
+              <label>深度</label>
+              <select id="gq-lineage-depth" class="gq-param-select"><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option></select>
+            </div>
+            <button class="gq-run-btn" onclick="runLineage()">查询血缘</button>
+          </div>
+        </div>
+
+        <!-- 节点度 -->
+        <div class="gq-panel" id="gq-panel-degree">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>节点</label>
+              <div class="searchable-select" data-target="gq-degree-node"></div>
+            </div>
+            <button class="gq-run-btn" onclick="runDegree()">查询度数</button>
+          </div>
+        </div>
+
+        <!-- 多跳邻接 -->
+        <div class="gq-panel" id="gq-panel-multihop">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>起始节点</label>
+              <div class="searchable-select" data-target="gq-multihop-node"></div>
+            </div>
+            <div class="gq-field">
+              <label>跳数</label>
+              <select id="gq-multihop-depth" class="gq-param-select"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="5">5</option></select>
+            </div>
+            <button class="gq-run-btn" onclick="runMultiHop()">查询</button>
+          </div>
+        </div>
+
+        <!-- 子图 -->
+        <div class="gq-panel" id="gq-panel-subtree">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>根节点</label>
+              <div class="searchable-select" data-target="gq-subtree-node"></div>
+            </div>
+            <div class="gq-field">
+              <label>深度</label>
+              <select id="gq-subtree-depth" class="gq-param-select"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option></select>
+            </div>
+            <button class="gq-run-btn" onclick="runSubtree()">提取子图</button>
+          </div>
+        </div>
+
+        <!-- 共现分析 -->
+        <div class="gq-panel" id="gq-panel-cooccur">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>实体名称</label>
+              <div class="searchable-select" data-target="gq-cooccur-entity" data-filter="entity"></div>
+            </div>
+            <button class="gq-run-btn" onclick="runCoOccurrence()">查询共现</button>
+          </div>
+        </div>
+
+        <!-- 中心性排行 -->
+        <div class="gq-panel" id="gq-panel-central">
+          <div class="gq-form-row">
+            <div class="gq-field">
+              <label>数量</label>
+              <select id="gq-central-limit" class="gq-param-select"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select>
+            </div>
+            <button class="gq-run-btn" onclick="runCentral()">排行</button>
+          </div>
+        </div>
+
+        <!-- 全图统计 -->
+        <div class="gq-panel" id="gq-panel-stats">
+          <div class="gq-form-row">
+            <button class="gq-run-btn" onclick="runStats()">获取统计</button>
+          </div>
+        </div>
+
+        <!-- 结果区 -->
+        <div id="gq-result" class="gq-result"></div>
       </div>
       <div class="graph-controls">
         <div class="filter-group">
@@ -651,6 +804,8 @@ let graphData = {nodes: [], edges: []};
 let currentLayout = 'force';
 let focusNode = null;
 let graphSimulation = null;
+// 子图覆盖：图查询结果渲染时设置，null 表示用全图过滤数据
+let subgraphOverride = null;
 
 const TYPE_COLORS = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538', raw: '#787774', archive: '#9F2F2D', conversation: '#956400', version: '#A8A6A1'};
 const EDGE_COLORS = {
@@ -680,6 +835,7 @@ async function renderGraph() {
     renderLegend();
     buildGraph();
     populateNodeSelects();
+    initSearchableSelects();
   } catch (e) {
     svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载失败</text>';
   }
@@ -736,15 +892,19 @@ function getFilteredData() {
   };
   const visNodes = graphData.nodes.filter(n => typeOk(n.type));
   const visIds = new Set(visNodes.map(n => n.id));
-  const visEdges = graphData.edges.filter(e =>
-    visIds.has(e.source) && visIds.has(e.target) &&
-    (!edgeFilter || e.type === edgeFilter)
-  );
+  // D3 forceLink 会把 edge.source/target 从字符串 ID 替换为节点对象，
+  // 因此这里需兼容两种形态；同时返回浅拷贝，避免 D3 改写 graphData 中的原始边对象。
+  const srcId = e => (e.source && typeof e.source === 'object') ? e.source.id : e.source;
+  const dstId = e => (e.target && typeof e.target === 'object') ? e.target.id : e.target;
+  const visEdges = graphData.edges
+    .filter(e => visIds.has(srcId(e)) && visIds.has(dstId(e)) &&
+      (!edgeFilter || e.type === edgeFilter))
+    .map(e => ({source: srcId(e), target: dstId(e), type: e.type}));
   return {nodes: visNodes, edges: visEdges};
 }
 
 function buildGraph() {
-  const {nodes, edges} = getFilteredData();
+  const {nodes, edges} = subgraphOverride || getFilteredData();
   const svgEl = document.getElementById('graph-svg');
   const W = svgEl.clientWidth || 800, H = 560;
 
@@ -893,7 +1053,46 @@ function buildGraph() {
     });
   }
 
-  document.getElementById('graph-info').textContent = `${nodes.length} 节点 · ${edges.length} 边`;
+  const infoEl = document.getElementById('graph-info');
+  infoEl.textContent = `${nodes.length} 节点 · ${edges.length} 边${subgraphOverride ? '（子图）' : ''}`;
+  // 子图模式下显示「返回全图」按钮
+  const resetBtn = document.getElementById('graph-reset-btn');
+  if (resetBtn) resetBtn.style.display = subgraphOverride ? '' : 'none';
+}
+
+// ── 子图渲染：图查询结果驱动图谱 ──
+// 从全图 graphData 中按节点 ID 集合提取节点对象（保留 label/type/degree），
+// edges 为 {source, target, type} 列表（source/target 为字符串 ID）。
+function renderSubgraph(nodeIds, edges) {
+  const idSet = new Set(nodeIds);
+  // 从 graphData.nodes 取已存在的节点信息（含 label/type），缺失的用 ID 兜底。
+  // 只拷贝业务字段，不拷贝 D3 内部状态（x/y/vx/vy/index 等），避免污染新模拟。
+  const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+  const subNodes = [...idSet].map(id => {
+    const n = nodeMap.get(id);
+    if (n) return { id: n.id, label: n.label, type: n.type, summary: n.summary || '', degree: 0 };
+    return { id, label: id.split(':').pop(), type: id.split(':')[0], degree: 0, summary: '' };
+  });
+  // 计算子图内度数
+  const degMap = {};
+  edges.forEach(e => {
+    degMap[e.source] = (degMap[e.source] || 0) + 1;
+    degMap[e.target] = (degMap[e.target] || 0) + 1;
+  });
+  subNodes.forEach(n => { n.degree = degMap[n.id] || 0; });
+  // 边做拷贝（防止 D3 forceLink 污染）
+  const subEdges = edges.map(e => ({ source: e.source, target: e.target, type: e.type }));
+  subgraphOverride = { nodes: subNodes, edges: subEdges };
+  currentLayout = 'force';
+  document.querySelectorAll('.layout-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.layout === 'force'));
+  buildGraph();
+}
+
+// 返回全图模式
+function resetGraph() {
+  subgraphOverride = null;
+  buildGraph();
 }
 
 function applyLayout(nodes, edges, W, H) {
@@ -915,10 +1114,18 @@ function forceLayout(nodes, edges, W, H) {
   const chargeStrength = -Math.max(200, nodeCount * 8);
   // 链接距离随节点数自适应
   const linkDistance = Math.max(70, Math.min(160, nodeCount * 2.5));
+  // 每次力导向布局都重新随机分布初始位置 + 清零速度，
+  // 避免上一次模拟残留的 x/y/vx/vy 导致节点堆叠在一点。
+  const spread = Math.min(W, 600);
+  nodes.forEach(n => {
+    n.x = W / 2 + (Math.random() - 0.5) * spread;
+    n.y = H / 2 + (Math.random() - 0.5) * Math.min(H, 400);
+    n.vx = 0; n.vy = 0;
+  });
   graphSimulation = d3.forceSimulation(nodes)
-    .alphaDecay(0.02)
+    .alpha(1).alphaDecay(0.02)
     .force('link', d3.forceLink(edges).id(d => d.id).distance(linkDistance).strength(0.15))
-    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(400))
+    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(800))
     .force('center', d3.forceCenter(W / 2, H / 2).strength(0.04))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 8).strength(0.8));
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
@@ -1342,60 +1549,420 @@ function toggleGraphQuery() {
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? 'block' : 'none';
   btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
+  if (isHidden) initSearchableSelects();
 }
-// 将节点 ID 转为友好标签
+
+// 节点 ID → 友好标签
 function nodeLabel(id) {
   const n = graphData.nodes.find(x => x.id === id);
   return n ? n.label : id.split(':').pop();
 }
 
+// 节点类型 → badge class
+function typeBadgeClass(type) {
+  return ({document:'doc', entity:'entity', tag:'tag', topic:'topic', raw:'raw', archive:'archive'})[type] || 'raw';
+}
+
+// ── 可搜索下拉框 ──
+const ssState = {}; // targetId -> {value, filteredNodes}
+
+function initSearchableSelects() {
+  document.querySelectorAll('.searchable-select').forEach(container => {
+    const targetId = container.dataset.target;
+    const typeFilter = container.dataset.filter; // 'document', 'entity', etc.
+    if (!targetId || ssState[targetId]) return; // 已初始化
+
+    let nodes = graphData.nodes;
+    if (typeFilter) nodes = nodes.filter(n => n.type === typeFilter);
+
+    ssState[targetId] = { value: '', nodes };
+
+    container.innerHTML = `
+      <input type="text" class="ss-input" id="${targetId}-input" placeholder="搜索或选择节点…" autocomplete="off">
+      <div class="ss-dropdown" id="${targetId}-dropdown"></div>
+    `;
+
+    const input = document.getElementById(`${targetId}-input`);
+    const dropdown = document.getElementById(`${targetId}-dropdown`);
+    let activeIdx = -1;
+
+    function renderOptions(filter = '') {
+      const filtered = filter
+        ? nodes.filter(n => n.label.toLowerCase().includes(filter.toLowerCase()) || n.id.toLowerCase().includes(filter.toLowerCase()))
+        : nodes;
+      activeIdx = -1;
+      if (!filtered.length) {
+        dropdown.innerHTML = '<div class="ss-option" style="color:var(--text-tertiary)">无匹配节点</div>';
+        return;
+      }
+      dropdown.innerHTML = filtered.slice(0, 50).map((n, i) =>
+        `<div class="ss-option" data-id="${esc(n.id)}" data-idx="${i}">
+          ${esc(n.label)}<span class="ss-type">[${n.type}]</span>
+        </div>`
+      ).join('');
+      // 点击选项
+      dropdown.querySelectorAll('.ss-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+          const id = opt.dataset.id;
+          if (!id) return;
+          ssState[targetId].value = id;
+          input.value = nodeLabel(id);
+          dropdown.classList.remove('show');
+        });
+      });
+    }
+
+    input.addEventListener('focus', () => {
+      renderOptions(input.value);
+      dropdown.classList.add('show');
+    });
+    input.addEventListener('input', () => {
+      ssState[targetId].value = ''; // 清空已选值
+      renderOptions(input.value);
+      dropdown.classList.add('show');
+    });
+    input.addEventListener('keydown', (e) => {
+      const opts = dropdown.querySelectorAll('.ss-option');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, opts.length - 1);
+        opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+        if (opts[activeIdx]) opts[activeIdx].scrollIntoView({block: 'nearest'});
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, 0);
+        opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+        if (opts[activeIdx]) opts[activeIdx].scrollIntoView({block: 'nearest'});
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeIdx >= 0 && opts[activeIdx] && opts[activeIdx].dataset.id) {
+          const id = opts[activeIdx].dataset.id;
+          ssState[targetId].value = id;
+          input.value = nodeLabel(id);
+          dropdown.classList.remove('show');
+        }
+      } else if (e.key === 'Escape') {
+        dropdown.classList.remove('show');
+      }
+    });
+    // 点击外部关闭
+    document.addEventListener('click', (e) => {
+      if (!container.contains(e.target)) dropdown.classList.remove('show');
+    });
+  });
+}
+
+// 获取可搜索下拉框的值
+function getSSValue(targetId) {
+  return ssState[targetId]?.value || '';
+}
+
+// ── 查询 Tab 切换 ──
+document.querySelectorAll('.gq-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.gq-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.gq-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('gq-panel-' + tab.dataset.gq).classList.add('active');
+  });
+});
+
+// ── 结果渲染辅助 ──
+function gqLoading() {
+  document.getElementById('gq-result').innerHTML = '<div class="loading">查询中</div>';
+}
+function gqError(msg) {
+  document.getElementById('gq-result').innerHTML = `<span style="color:var(--red-fg)">⚠ ${esc(msg)}</span>`;
+}
+function gqNodeChip(id) {
+  const label = nodeLabel(id);
+  const type = id.split(':')[0];
+  return `<span class="gq-badge ${typeBadgeClass(type)}">${esc(label)}</span>`;
+}
+function gqEdgeChip(type) {
+  return `<span class="gq-edge-badge">${esc(type)}</span>`;
+}
+function gqClickableNode(id) {
+  const label = nodeLabel(id);
+  const type = id.split(':')[0];
+  return `<span class="gq-badge ${typeBadgeClass(type)} gq-clickable" onclick="gqNodeClick('${esc(id)}')">${esc(label)}</span>`;
+}
+function gqNodeClick(id) {
+  // 在图查询结果中点击节点 → 跳转到对应视图
+  graphNodeClick(id);
+}
+
+// ── 1. 最短路径 ──
 async function runShortestPath() {
-  const src = document.getElementById('gq-path-src').value;
-  const dst = document.getElementById('gq-path-dst').value;
+  const src = getSSValue('gq-path-src');
+  const dst = getSSValue('gq-path-dst');
   if (!src || !dst) { alert('请选择源节点和目标节点'); return; }
-  const el = document.getElementById('gq-result');
-  el.innerHTML = '<div class="loading">查询中</div>';
+  gqLoading();
   try {
     const r = await fetch(API + `/api/graph/${encodeURIComponent(src)}/shortest-path?target=${encodeURIComponent(dst)}`);
     const d = await r.json();
+    const el = document.getElementById('gq-result');
     if (d.length === -1 || (d.path && !d.path.length)) {
       el.innerHTML = '<span style="color:var(--red-fg)">未找到路径</span>';
-    } else {
-      el.innerHTML = `路径长度: ${d.length}<br>路径: ${d.path.map(p => esc(nodeLabel(p))).join(' → ')}`;
+      resetGraph();
+      return;
     }
-  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+    const pathHtml = d.path.map((p, i) => {
+      const edge = d.edges?.[i];
+      return gqClickableNode(p) + (edge ? ` <span class="gq-arrow">→</span> ${gqEdgeChip(edge.type)} <span class="gq-arrow">→</span> ` : '');
+    }).join('');
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">最短路径 — 长度 ${d.length}</div>
+      <div class="gq-path-step">${pathHtml}</div>`;
+    // 在知识图谱中渲染路径子图
+    const subEdges = (d.edges || []).map(e => ({source: e.from, target: e.to, type: e.type}));
+    renderSubgraph(d.path, subEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
 }
+
+// ── 2. 共同邻居 ──
 async function runCommonNeighbors() {
-  const a = document.getElementById('gq-common-a').value;
-  const b = document.getElementById('gq-common-b').value;
+  const a = getSSValue('gq-common-a');
+  const b = getSSValue('gq-common-b');
   if (!a || !b) { alert('请选择两个节点'); return; }
-  const el = document.getElementById('gq-result');
-  el.innerHTML = '<div class="loading">查询中</div>';
+  gqLoading();
   try {
     const r = await fetch(API + `/api/graph/${encodeURIComponent(a)}/common?other=${encodeURIComponent(b)}`);
     const d = await r.json();
-    el.innerHTML = `共同邻居: ${d.count}<br>${(d.common || []).map(c => esc(c.label) + ' (' + c.type + ')').join('<br>')}`;
-  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+    const el = document.getElementById('gq-result');
+    const common = d.common || [];
+    if (!common.length) {
+      el.innerHTML = `<div style="margin-bottom:8px;">${gqNodeChip(d.node_a)} 与 ${gqNodeChip(d.node_b)} 无共同邻居</div>`;
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">共同邻居 — ${d.count} 个</div>
+      <div style="margin-bottom:8px;">${gqNodeChip(d.node_a)} ↔ ${gqNodeChip(d.node_b)}</div>
+      ${common.map(c => `<div class="gq-card">
+        ${gqClickableNode(c.node)}
+        <div class="gq-card-meta">A 边: ${gqEdgeChip(c.a_edge || 'N/A')} · B 边: ${gqEdgeChip(c.b_edge || 'N/A')}</div>
+      </div>`).join('')}`;
+    // 在知识图谱中渲染共同邻居子图
+    const cnNodeIds = [d.node_a, d.node_b, ...common.map(c => c.node)];
+    const cnEdges = [];
+    common.forEach(c => {
+      if (c.a_edge) cnEdges.push({source: d.node_a, target: c.node, type: c.a_edge});
+      if (c.b_edge) cnEdges.push({source: d.node_b, target: c.node, type: c.b_edge});
+    });
+    renderSubgraph(cnNodeIds, cnEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
 }
+
+// ── 3. 知识血缘 ──
 async function runLineage() {
-  const docId = document.getElementById('gq-lineage').value;
+  const docId = getSSValue('gq-lineage');
   if (!docId) { alert('请选择文档'); return; }
-  const el = document.getElementById('gq-result');
-  el.innerHTML = '<div class="loading">查询中</div>';
+  const depth = document.getElementById('gq-lineage-depth').value;
+  gqLoading();
   try {
-    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/lineage`);
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/lineage?max_depth=${depth}`);
     const d = await r.json();
-    el.innerHTML = `上游: ${d.upstream_count} · 下游: ${d.downstream_count}<br>节点: ${(d.nodes || []).map(n => esc(n.label)).join(', ')}<br>边: ${(d.edges || []).map(e => esc(nodeLabel(e.from)) + ' →(' + e.type + ')→ ' + esc(nodeLabel(e.to))).join('<br>')}`;
-  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+    const el = document.getElementById('gq-result');
+    const edges = d.edges || [];
+    if (!edges.length) {
+      el.innerHTML = `<div>${gqNodeChip(d.root)} 无上下游知识链</div>`;
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">知识血缘 — 上游 ${d.upstream_count} · 下游 ${d.downstream_count}</div>
+      <div style="margin-bottom:6px;">根节点: ${gqNodeChip(d.root)}</div>
+      ${edges.map(e => `<div class="gq-card">
+        ${gqClickableNode(e.from)} <span class="gq-arrow">→</span> ${gqEdgeChip(e.type)} <span class="gq-arrow">→</span> ${gqClickableNode(e.to)}
+      </div>`).join('')}`;
+    // 在知识图谱中渲染血缘子图
+    const linNodeIds = [d.root, ...edges.flatMap(e => [e.from, e.to])];
+    const linEdges = edges.map(e => ({source: e.from, target: e.to, type: e.type}));
+    renderSubgraph(linNodeIds, linEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
 }
-async function runCentral() {
-  const el = document.getElementById('gq-result');
-  el.innerHTML = '<div class="loading">查询中</div>';
+
+// ── 4. 节点度 ──
+async function runDegree() {
+  const nodeId = getSSValue('gq-degree-node');
+  if (!nodeId) { alert('请选择节点'); return; }
+  gqLoading();
   try {
-    const r = await fetch(API + '/api/graph/central?limit=10');
+    const r = await fetch(API + `/api/graph/${encodeURIComponent(nodeId)}/degree`);
     const d = await r.json();
-    el.innerHTML = '度中心性 Top 10:<br>' + (d.nodes || []).map((n, i) => `${i+1}. ${esc(n.label)} (${n.type}) 度=${n.degree}`).join('<br>');
-  } catch (e) { el.innerHTML = '<span style="color:var(--red-fg)">⚠ 查询失败</span>'; }
+    const el = document.getElementById('gq-result');
+    const outNbrs = d.out_neighbors || [];
+    const inNbrs = d.in_neighbors || [];
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">${gqNodeChip(d.node)} 度数分析</div>
+      <div class="gq-stat-grid" style="margin-bottom:12px;">
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.out_degree}</div><div class="gq-stat-label">出度</div></div>
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.in_degree}</div><div class="gq-stat-label">入度</div></div>
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.total_degree}</div><div class="gq-stat-label">总度</div></div>
+      </div>
+      ${outNbrs.length ? `<div style="margin-bottom:8px;font-weight:500;">出边邻居 (${outNbrs.length})</div>
+        ${outNbrs.map(n => `<div class="gq-card">${gqClickableNode(n.node)} ${gqEdgeChip(n.edge)}</div>`).join('')}` : ''}
+      ${inNbrs.length ? `<div style="margin-bottom:8px;font-weight:500;">入边邻居 (${inNbrs.length})</div>
+        ${inNbrs.map(n => `<div class="gq-card">${gqClickableNode(n.node)} ${gqEdgeChip(n.edge)}</div>`).join('')}` : ''}`;
+    // 在知识图谱中渲染度数邻居子图
+    const degNodeIds = [d.node, ...outNbrs.map(n => n.node), ...inNbrs.map(n => n.node)];
+    const degEdges = [
+      ...outNbrs.map(n => ({source: d.node, target: n.node, type: n.edge})),
+      ...inNbrs.map(n => ({source: n.node, target: d.node, type: n.edge})),
+    ];
+    renderSubgraph(degNodeIds, degEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 5. 多跳邻接 ──
+async function runMultiHop() {
+  const nodeId = getSSValue('gq-multihop-node');
+  if (!nodeId) { alert('请选择起始节点'); return; }
+  const depth = document.getElementById('gq-multihop-depth').value;
+  gqLoading();
+  try {
+    const r = await fetch(API + `/api/graph/${encodeURIComponent(nodeId)}/multi-hop?depth=${depth}`);
+    const d = await r.json();
+    const el = document.getElementById('gq-result');
+    const levels = d.levels || [];
+    if (!levels.length || d.total_reachable === 0) {
+      el.innerHTML = `<div>${gqNodeChip(d.root)} 在 ${depth} 跳内无可达节点</div>`;
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">多跳邻接 — ${d.total_reachable} 个可达节点</div>
+      <div style="margin-bottom:6px;">根节点: ${gqNodeChip(d.root)}</div>
+      ${levels.map(lv => lv.nodes.length ? `<div style="margin-top:8px;font-weight:500;color:var(--text-secondary);">第 ${lv.hop} 跳 (${lv.nodes.length})</div>
+        ${lv.nodes.map(n => `<div class="gq-card">
+          ${gqClickableNode(n.id)} <span class="gq-card-meta">via ${esc(nodeLabel(n.via))} · ${gqEdgeChip(n.edge)}</span>
+        </div>`).join('')}` : '').join('')}`;
+    // 在知识图谱中渲染多跳邻接子图
+    const mhNodeIds = [d.root, ...levels.flatMap(lv => lv.nodes.map(n => n.id))];
+    const mhEdges = levels.flatMap(lv =>
+      lv.nodes.map(n => ({source: n.via, target: n.id, type: n.edge})));
+    renderSubgraph(mhNodeIds, mhEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 6. 子图提取 ──
+async function runSubtree() {
+  const nodeId = getSSValue('gq-subtree-node');
+  if (!nodeId) { alert('请选择根节点'); return; }
+  const depth = document.getElementById('gq-subtree-depth').value;
+  gqLoading();
+  try {
+    const r = await fetch(API + `/api/graph/${encodeURIComponent(nodeId)}/subtree?depth=${depth}`);
+    const d = await r.json();
+    const el = document.getElementById('gq-result');
+    const nodes = d.nodes || [];
+    const edges = d.edges || [];
+    if (!nodes.length) {
+      el.innerHTML = '<span style="color:var(--red-fg)">未找到子图</span>';
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">子图 — ${nodes.length} 节点 · ${edges.length} 边</div>
+      <div style="margin-bottom:6px;">根节点: ${gqNodeChip(nodeId)}</div>
+      <div style="margin-bottom:6px;font-weight:500;">节点:</div>
+      <div style="margin-bottom:8px;">${nodes.map(n => gqClickableNode(n.id)).join(' ')}</div>
+      ${edges.length ? `<div style="margin-bottom:6px;font-weight:500;">边 (${edges.length}):</div>
+        ${edges.map(e => `<div class="gq-card">${gqClickableNode(e.from)} <span class="gq-arrow">→</span> ${gqEdgeChip(e.type)} <span class="gq-arrow">→</span> ${gqClickableNode(e.to)}</div>`).join('')}` : ''}`;
+    // 在知识图谱中渲染提取的子图
+    renderSubgraph(nodes.map(n => n.id), edges.map(e => ({source: e.from, target: e.to, type: e.type})));
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 7. 共现分析 ──
+async function runCoOccurrence() {
+  const entityId = getSSValue('gq-cooccur-entity');
+  if (!entityId) { alert('请选择实体'); return; }
+  const entityName = nodeLabel(entityId);
+  gqLoading();
+  try {
+    const r = await fetch(API + `/api/entities/${encodeURIComponent(entityName)}/co-occurrence`);
+    const d = await r.json();
+    const el = document.getElementById('gq-result');
+    const coocs = d.co_occurrences || [];
+    if (!coocs.length) {
+      el.innerHTML = `<div>${gqNodeChip(d.entity || entityId)} 无共现实体</div>`;
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">共现分析 — ${d.count} 个相关实体</div>
+      <div style="margin-bottom:8px;">实体: ${gqNodeChip(d.entity || entityId)}</div>
+      ${coocs.map(c => `<div class="gq-card">
+        ${gqClickableNode(c.entity)}
+        <div class="gq-card-meta">共现次数: ${c.co_occurrence_count}</div>
+      </div>`).join('')}`;
+    // 在知识图谱中渲染共现子图（中心实体 ↔ 共现实体）
+    const coEntity = d.entity || entityId;
+    const coNodeIds = [coEntity, ...coocs.map(c => c.entity)];
+    const coEdges = coocs.map(c => ({source: coEntity, target: c.entity, type: 'entity_related'}));
+    renderSubgraph(coNodeIds, coEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 8. 中心性排行 ──
+async function runCentral() {
+  const limit = document.getElementById('gq-central-limit').value;
+  gqLoading();
+  try {
+    const r = await fetch(API + `/api/graph/central?limit=${limit}`);
+    const d = await r.json();
+    const el = document.getElementById('gq-result');
+    const nodes = d.nodes || [];
+    if (!nodes.length) {
+      el.innerHTML = '<span style="color:var(--red-fg)">无数据</span>';
+      resetGraph();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">度中心性 Top ${nodes.length}</div>
+      ${nodes.map((n, i) => `<div class="gq-card">
+        <span style="color:var(--text-tertiary);font-family:var(--font-mono);margin-right:8px;">#${i+1}</span>
+        ${gqClickableNode(n.node)}
+        <span class="gq-card-meta">度=${n.degree} (入${n.in_degree}/出${n.out_degree})</span>
+      </div>`).join('')}`;
+    // 在知识图谱中渲染 Top 节点（含全图中它们之间的连边）
+    const cenNodeIds = nodes.map(n => n.node);
+    const srcId = e => (e.source && typeof e.source === 'object') ? e.source.id : e.source;
+    const dstId = e => (e.target && typeof e.target === 'object') ? e.target.id : e.target;
+    const cenIdSet = new Set(cenNodeIds);
+    const cenEdges = graphData.edges
+      .filter(e => cenIdSet.has(srcId(e)) && cenIdSet.has(dstId(e)))
+      .map(e => ({source: srcId(e), target: dstId(e), type: e.type}));
+    renderSubgraph(cenNodeIds, cenEdges);
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
+}
+
+// ── 9. 全图统计 ──
+async function runStats() {
+  gqLoading();
+  try {
+    const r = await fetch(API + '/api/graph/stats');
+    const d = await r.json();
+    const el = document.getElementById('gq-result');
+    const nodeCounts = d.nodes || {};
+    const edgeCounts = d.edges || {};
+    el.innerHTML = `
+      <div style="margin-bottom:8px;font-weight:600;">全图统计</div>
+      <div class="gq-stat-grid" style="margin-bottom:12px;">
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.total_nodes}</div><div class="gq-stat-label">总节点</div></div>
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.total_edges}</div><div class="gq-stat-label">总边</div></div>
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.avg_degree}</div><div class="gq-stat-label">平均度</div></div>
+        <div class="gq-stat-item"><div class="gq-stat-value">${d.density}</div><div class="gq-stat-label">密度</div></div>
+      </div>
+      <div style="margin-bottom:6px;font-weight:500;">节点分布</div>
+      <div style="margin-bottom:8px;">${Object.entries(nodeCounts).map(([t, c]) => `<span class="gq-badge ${typeBadgeClass(t)}">${t}: ${c}</span>`).join(' ')}</div>
+      <div style="margin-bottom:6px;font-weight:500;">边分布</div>
+      ${Object.entries(edgeCounts).filter(([, c]) => c > 0).map(([t, c]) => `<div class="gq-card">${gqEdgeChip(t)} <span class="gq-card-meta">${c} 条</span></div>`).join('')}`;
+    // 统计是全图视角，恢复全图渲染
+    resetGraph();
+  } catch (err) { console.error(err); gqError('查询失败: ' + (err && err.message ? err.message : err)); }
 }
 
 // ── Metadata view ──
