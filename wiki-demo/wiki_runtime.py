@@ -50,10 +50,23 @@ _ALL_TABLES = ["document", "entity", "tag", "topic", "raw", "archive", "conversa
 # ====================================================================== #
 #  辅助
 # ====================================================================== #
+def _safe_key(key: str) -> str:
+    """将字符串转换为安全的 SurrealDB record-id key。
+
+    SurrealDB record ID 只支持 ASCII 字母/数字/下划线，
+    非 ASCII 字符（如中文）会被替换为 _，若结果为空则使用哈希 fallback。
+    """
+    safe = re.sub(r"[^A-Za-z0-9_]", "_", key)
+    safe = safe.strip("_")
+    if not safe:
+        # fallback：原始 key 全为非 ASCII 或空时使用哈希
+        safe = f"key_{abs(hash(key)) % 100000}"
+    return safe
+
+
 def _rid(table: str, key: str) -> str:
     """构造 SurrealDB RecordID：table:key（key 会被转义）。"""
-    safe = re.sub(r"[^A-Za-z0-9_]", "_", key)
-    return f"{table}:{safe}"
+    return f"{table}:{_safe_key(key)}"
 
 
 def _extract_id(record_id) -> str:
@@ -111,8 +124,8 @@ def create_document(
     对应 design.md 第一节："数据库是真实来源，Markdown 是导出产物"。
     返回完整文档对象（含 id）。
     """
-    key = doc_key or re.sub(r"[^A-Za-z0-9_]", "_", title.lower()).strip("_")
-    if not key:
+    key = doc_key or _safe_key(title.lower())
+    if not key or key == f"key_{abs(hash(title.lower())) % 100000}":
         key = f"doc_{int(time.time())}"
     rid = _rid("document", key)
 
@@ -139,18 +152,18 @@ def create_document(
         relate(rid, "belongs_to", _rid("topic", topic_id))
     if tags:
         for tag_name in tags:
-            tag_key = re.sub(r"[^A-Za-z0-9_]", "_", tag_name.lower()).strip("_")
+            tag_key = _safe_key(tag_name.lower())
             ensure_tag(tag_key, tag_name)
             relate(rid, "has_tag", _rid("tag", tag_key))
     if entities:
         for ent in entities:
             ent_name = ent["name"]
-            ent_key = re.sub(r"[^A-Za-z0-9_]", "_", ent_name.lower()).strip("_")
+            ent_key = _safe_key(ent_name.lower())
             ensure_entity(ent_key, ent_name, ent.get("type"))
             relate(rid, "mentions", _rid("entity", ent_key))
     if relations:
         for rel in relations:
-            target_key = re.sub(r"[^A-Za-z0-9_]", "_", rel["target_title"].lower()).strip("_")
+            target_key = _safe_key(rel["target_title"].lower())
             relate(rid, rel.get("type", "related"), _rid("document", target_key))
 
     return get_document(rid)  # type: ignore[return-value]
@@ -241,14 +254,50 @@ def update_document(doc_id: str, **fields) -> dict | None:
     return get_document(rid)
 
 
-def delete_document(doc_id: str) -> bool:
-    """删除文档及其关联边。"""
+def delete_document(doc_id: str) -> dict:
+    """删除文档及其所有关联边、版本快照。
+
+    返回 {deleted, doc_id, title, edges_removed, versions_removed}
+    """
     rid = doc_id if ":" in doc_id else _rid("document", doc_id)
+    doc = get_document(rid)
+    title = doc.get("title", "") if doc else ""
+    edges_removed = 0
+    versions_removed = 0
+
+    # 1. 删除所有与该文档关联的边
+    all_edge_types = _DOC_RELATION_TYPES + _DOC_META_TYPES + _VERSION_EDGE_TYPES + _MEMORY_EDGE_TYPES
+    for et in all_edge_types:
+        try:
+            _q(f"DELETE FROM {et} WHERE in = {rid} OR out = {rid}")
+            edges_removed += 1
+        except Exception:
+            pass
+
+    # 2. 删除版本快照
+    try:
+        ver_rows = _q(f"SELECT id FROM version WHERE doc_id = '{rid}'")
+        vers = _flatten(ver_rows)
+        for v in vers:
+            if isinstance(v, dict) and v.get("id"):
+                _q(f"DELETE FROM {_extract_id(v['id'])}")
+                versions_removed += 1
+    except Exception:
+        pass
+
+    # 3. 删除文档本身
     try:
         _q(f"DELETE FROM {rid}")
-        return True
-    except Exception:
-        return False
+    except Exception as e:
+        return {"deleted": False, "doc_id": rid, "error": str(e)}
+
+    return {
+        "deleted": True,
+        "doc_id": rid,
+        "title": title,
+        "edges_removed": edges_removed,
+        "versions_removed": versions_removed,
+    }
 
 
 def export_markdown(doc_id: str) -> str | None:
@@ -1252,7 +1301,7 @@ def _metadata_search(query: str, topk: int) -> list[dict]:
     # 解析 topic=xxx
     topic_match = re.search(r"topic[=:]?\s*(\S+)", query, re.IGNORECASE)
     if topic_match:
-        topic_key = re.sub(r"[^A-Za-z0-9_]", "_", topic_match.group(1).lower())
+        topic_key = _safe_key(topic_match.group(1).lower())
         for d in docs_by_topic(topic_key):
             results.append({
                 "doc_id": d["doc_id"],
@@ -1272,7 +1321,7 @@ def create_raw(url: str | None, author: str | None,
 
     对应 design.md 第一节：RawSource 是独立对象，Markdown 只是导出产物。
     """
-    key = raw_key or re.sub(r"[^A-Za-z0-9_]", "_", (url or content[:30]).lower()).strip("_")
+    key = raw_key or _safe_key((url or content[:30]).lower())
     if not key:
         key = f"raw_{int(time.time())}"
     rid = _rid("raw", key)
@@ -1327,7 +1376,7 @@ def link_raw(doc_id: str, raw_id: str) -> dict:
 # ====================================================================== #
 def create_archive(title: str, content: str, source: str | None = None) -> dict:
     """创建 ArchiveDocument 对象。"""
-    key = re.sub(r"[^A-Za-z0-9_]", "_", title.lower()).strip("_") or f"arch_{int(time.time())}"
+    key = _safe_key(title.lower()) or f"arch_{int(time.time())}"
     rid = _rid("archive", key)
     _q(f"""
         UPSERT {rid} SET
@@ -1434,7 +1483,7 @@ def merge_document(source_id: str, target_id: str,
     # 创建合并后的新文档
     merged = create_document(
         title=merged_title, content=merged_content, summary=merged_summary,
-        doc_key=re.sub(r"[^A-Za-z0-9_]", "_", merged_title.lower()).strip("_") + "_merged",
+        doc_key=_safe_key(merged_title.lower()) + "_merged",
     )
     merged_rid = merged.get("id", "")
     if merged_rid:
@@ -1466,14 +1515,14 @@ def update_metadata(doc_id: str, tags: list[str] | None = None,
     # 重建 tag 边
     if tags:
         for tag_name in tags:
-            tag_key = re.sub(r"[^A-Za-z0-9_]", "_", tag_name.lower()).strip("_")
+            tag_key = _safe_key(tag_name.lower())
             ensure_tag(tag_key, tag_name)
             relate(rid, "has_tag", _rid("tag", tag_key))
     # 重建 entity 边
     if entities:
         for ent in entities:
             ent_name = ent["name"]
-            ent_key = re.sub(r"[^A-Za-z0-9_]", "_", ent_name.lower()).strip("_")
+            ent_key = _safe_key(ent_name.lower())
             ensure_entity(ent_key, ent_name, ent.get("type"))
             relate(rid, "mentions", _rid("entity", ent_key))
     return get_document(rid) or {"id": rid, "updated": True}
@@ -1496,12 +1545,12 @@ def build_graph(doc_id: str) -> dict:
         return {"error": f"抽取失败: {e}"}
     # 落库：创建/更新实体 + mentions 边 + entity 间关系
     for ent in result.get("entities", []):
-        ent_key = re.sub(r"[^A-Za-z0-9_]", "_", ent["name"].lower()).strip("_")
+        ent_key = _safe_key(ent["name"].lower())
         ensure_entity(ent_key, ent["name"], ent.get("type"))
         relate(rid, "mentions", _rid("entity", ent_key))
     for rel in result.get("relations", []):
-        from_key = re.sub(r"[^A-Za-z0-9_]", "_", rel["from"].lower()).strip("_")
-        to_key = re.sub(r"[^A-Za-z0-9_]", "_", rel["to"].lower()).strip("_")
+        from_key = _safe_key(rel["from"].lower())
+        to_key = _safe_key(rel["to"].lower())
         relate(f"entity:{from_key}", "entity_related", f"entity:{to_key}")
     return {
         "doc_id": rid,
@@ -1534,3 +1583,28 @@ def stats() -> dict:
         "conversations": _count("conversation"),
         "versions": _count("version"),
     }
+
+
+# ====================================================================== #
+#  重复检测（编译前检查文件是否已入库）
+# ====================================================================== #
+def find_documents_by_title(title: str) -> list[dict]:
+    """按标题精确匹配查找文档。"""
+    rows = _q("SELECT id, title FROM document WHERE title = $title", {"title": title})
+    docs = _flatten(rows)
+    return [{"id": _extract_id(d.get("id", "")), "title": d.get("title", "")}
+            for d in docs if isinstance(d, dict)]
+
+
+def check_duplicate(title: str) -> dict | None:
+    """检查是否存在重复文档（按标题 key 归一化比较）。
+
+    返回重复文档信息 dict 或 None。
+    """
+    key = _safe_key(title.lower())
+    all_docs = list_documents(limit=500)
+    for doc in all_docs:
+        doc_key = _safe_key((doc.get("title", "") or "").lower())
+        if doc_key and key and (doc_key == key):
+            return {"id": doc["id"], "title": doc.get("title", "")}
+    return None

@@ -114,12 +114,22 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .doc-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 20px; cursor: pointer;
-  transition: all 0.25s var(--ease);
+  transition: all 0.25s var(--ease); position: relative;
 }
 .doc-card:hover { border-color: var(--border-strong); box-shadow: 0 4px 16px rgba(0,0,0,0.04); transform: translateY(-1px); }
-.doc-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+.doc-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; padding-right: 28px; }
 .doc-card .summary { font-family: var(--font-serif); font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; }
 .doc-card .meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.doc-card .delete-btn {
+  position: absolute; top: 14px; right: 14px;
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 1px solid transparent; background: transparent;
+  color: var(--text-tertiary); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s var(--ease); z-index: 2;
+}
+.doc-card:hover .delete-btn { background: var(--red-bg); color: var(--red-fg); border-color: var(--red-fg); }
+.doc-card .delete-btn:hover { background: var(--red-fg); color: #fff; }
 .tag {
   display: inline-block; padding: 2px 8px; border-radius: 4px;
   font-size: 11px; font-family: var(--font-mono); font-weight: 500;
@@ -299,6 +309,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .file-item .file-status.ok { color: var(--green-fg); }
 .file-item .file-status.error { color: var(--red-fg); }
 .file-item .file-status.pending { color: var(--text-tertiary); }
+.file-item .file-status.skipped { color: var(--yellow-fg); }
 /* ── Progress bar ── */
 .progress-bar { width: 100%; height: 6px; background: var(--surface-sunken); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
 .progress-fill { height: 100%; background: var(--blue-fg); border-radius: 3px; transition: width 0.3s var(--ease); width: 0%; }
@@ -690,10 +701,13 @@ function renderDocList(docs) {
       .map(e => `<span class="tag">${e.node.split(':').pop()}</span>`).join('');
     const topic = (doc.out_edges || []).filter(e => e.edge_type === 'belongs_to')
       .map(e => `<span class="tag topic">${e.node.split(':').pop()}</span>`).join('');
-    return `<div class="doc-card" onclick="showDocDetail('${doc.id}')">
+    return `<div class="doc-card">
+      <button class="delete-btn" onclick="event.stopPropagation();deleteDocument('${doc.id}')" title="删除文档">✕</button>
+      <div onclick="showDocDetail('${doc.id}')">
       <h3>${esc(doc.title)}</h3>
       <div class="summary">${esc(doc.summary || '')}</div>
       <div class="meta">${topic}${tags}</div>
+      </div>
     </div>`;
   }).join('') + '</div>';
 }
@@ -734,6 +748,7 @@ async function showDocDetail(docId) {
           <button class="back-btn" onclick="showVersionChain('${doc.id}')">版本历史</button>
           ${document.getElementById('status-llm').classList.contains('ok')
             ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>` : ''}
+          <button class="back-btn" style="color:var(--red-fg);border-color:var(--red-fg);" onclick="deleteDocument('${doc.id}')">删除文档</button>
         </div>
         <div id="version-chain-container"></div>
         ${relHtml}
@@ -751,6 +766,29 @@ function backToList() {
 
 function exportDoc(docId) {
   window.open(API + `/api/documents/${encodeURIComponent(docId)}/export`, '_blank');
+}
+
+async function deleteDocument(docId) {
+  if (!confirm('确定要删除这篇文档吗？知识图谱关系和向量库内容将同步删除，不可恢复。')) return;
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.deleted) {
+      const extra = [];
+      if (d.edges_removed) extra.push(`${d.edges_removed} 条边`);
+      if (d.versions_removed) extra.push(`${d.versions_removed} 个版本`);
+      if (d.vector_chunks_removed) extra.push(`${d.vector_chunks_removed} 个向量分块`);
+      const extraStr = extra.length ? ` (同时清理: ${extra.join(', ')})` : '';
+      // 返回列表
+      backToList();
+      loadDocs();
+      setTimeout(() => { alert(`已删除: ${d.title || docId}${extraStr}`); }, 200);
+    } else {
+      alert('删除失败: ' + (d.error || '未知错误'));
+    }
+  } catch (e) {
+    alert('删除失败: ' + e);
+  }
 }
 
 async function extractEntities(docId) {
@@ -1491,6 +1529,7 @@ function renderFileList() {
     const statusHtml = f.status === 'ok' ? '<span class="file-status ok">✓</span>'
       : f.status === 'error' ? '<span class="file-status error">✗</span>'
       : f.status === 'compiling' ? '<span class="file-status pending">⟳</span>'
+      : f.status === 'skipped' ? '<span class="file-status skipped">⊘ 已入库</span>'
       : '';
     return `<div class="file-item" id="file-item-${i}">
       <span class="file-name">${esc(f.name)}</span>
@@ -1513,9 +1552,10 @@ function clearFileList() {
   renderFileList();
 }
 
-// 批量编译：逐个文件上传到 /api/compile-batch
+// 批量编译：逐个文件上传到 /api/compile-batch（含重复检测）
 async function compileBatch() {
   if (!selectedFiles.length) return;
+
   const topic = document.getElementById('compile-topic').value.trim() || null;
   const progressEl = document.getElementById('batch-progress');
   const fillEl = document.getElementById('progress-fill');
@@ -1523,25 +1563,70 @@ async function compileBatch() {
   const batchBtn = document.getElementById('batch-compile-btn');
   const resultEl = document.getElementById('compile-result');
 
+  // ── 重复检测 ──
+  const titles = selectedFiles.map(f => {
+    const pureName = f.name.split('/').pop();
+    return pureName.replace(/\.[^.]+$/, ''); // 去掉扩展名 = title_hint
+  });
+  let duplicates = [];
+  try {
+    const dr = await fetch(API + '/api/documents/check-duplicates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(titles),
+    });
+    if (dr.ok) {
+      const dd = await dr.json();
+      duplicates = dd.duplicates || [];
+    }
+  } catch (e) { /* 检查失败不影响主流程 */ }
+
+  // 标记重复文件并询问用户
+  if (duplicates.length > 0) {
+    const dupNames = duplicates.map(d => `• ${d.title} → 已有文档「${d.existing_title}」`).join('\n');
+    const choice = confirm(
+      `检测到 ${duplicates.length} 个重复文件：\n\n${dupNames}\n\n点"确定"跳过重复继续编译其余文件\n点"取消"放弃本次编译`
+    );
+    if (!choice) {
+      resultEl.innerHTML = '<div style="color:var(--text-secondary)">已取消编译</div>';
+      return;
+    }
+    // 标记重复文件为跳过
+    const dupTitleSet = new Set(duplicates.map(d => d.title));
+    selectedFiles.forEach(f => {
+      const pureName = f.name.split('/').pop();
+      const hint = pureName.replace(/\.[^.]+$/, '');
+      if (dupTitleSet.has(hint)) {
+        f.status = 'skipped';
+        f.reason = '文件已编译入库';
+      }
+    });
+    renderFileList();
+  }
+
   progressEl.style.display = 'block';
   batchBtn.disabled = true;
   resultEl.innerHTML = '';
 
-  const total = selectedFiles.length;
+  const total = selectedFiles.filter(f => f.status !== 'skipped').length;
   let succeeded = 0;
+  let done = 0;
 
-  for (let i = 0; i < total; i++) {
+  for (let i = 0; i < selectedFiles.length; i++) {
     const f = selectedFiles[i];
+    if (f.status === 'skipped') continue;
+
     f.status = 'compiling';
     renderFileList();
+    done++;
 
-    const pct = Math.round((i / total) * 100);
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     fillEl.style.width = pct + '%';
-    textEl.textContent = `编译中 ${i+1}/${total}: ${f.name}`;
+    textEl.textContent = `编译中 ${done}/${total}: ${f.name}`;
 
     try {
       const formData = new FormData();
-      formData.append('files', f.file, f.name.split('/').pop()); // 用纯文件名
+      formData.append('files', f.file, f.name.split('/').pop());
       if (topic) formData.append('topic', topic);
 
       const r = await fetch(API + '/api/compile-batch', {
@@ -1554,7 +1639,6 @@ async function compileBatch() {
         f.reason = e.detail || '编译失败';
       } else {
         const d = await r.json();
-        // compile-batch 返回 results 数组
         const item = d.results && d.results[0];
         if (item && item.status === 'ok') {
           f.status = 'ok';
@@ -1574,16 +1658,22 @@ async function compileBatch() {
 
   // 完成
   fillEl.style.width = '100%';
-  textEl.textContent = `完成: ${succeeded}/${total} 成功`;
+  const skipped = selectedFiles.filter(f => f.status === 'skipped').length;
+  const failed = selectedFiles.filter(f => f.status === 'error').length;
+  textEl.textContent = `完成: ${succeeded} 成功` + (skipped > 0 ? `, ${skipped} 跳过` : '') + (failed > 0 ? `, ${failed} 失败` : '');
   batchBtn.disabled = false;
 
-  const failed = total - succeeded;
   let summaryHtml = `<div style="color:var(--green-fg)">✓ 成功编译 ${succeeded} 篇文档</div>`;
+  if (skipped > 0) {
+    summaryHtml += `<div style="color:var(--yellow-fg)">⊘ 跳过 ${skipped} 个重复文件（已入库）</div>`;
+  }
   if (failed > 0) {
     summaryHtml += `<div style="color:var(--red-fg)">⚠ ${failed} 篇失败</div>`;
-    const errors = selectedFiles.filter(f => f.status === 'error');
-    summaryHtml += '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">'
-      + errors.map(f => `${esc(f.name)}: ${esc(f.reason || '')}`).join('<br>') + '</div>';
+    const errors = selectedFiles.filter(f => f.status === 'error' || f.status === 'skipped');
+    if (errors.length) {
+      summaryHtml += '<div style="margin-top:8px;font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);">'
+        + errors.map(f => `${esc(f.name)}: ${esc(f.reason || f.status)}`).join('<br>') + '</div>';
+    }
   }
   resultEl.innerHTML = summaryHtml;
 

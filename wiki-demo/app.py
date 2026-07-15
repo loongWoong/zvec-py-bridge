@@ -95,9 +95,9 @@ def startup():
         import requests
         if config.LLM_API == "openai":
             headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"} if config.LLM_API_KEY else {}
-            r = requests.get(f"{config.LLM_URL}/v1/models", headers=headers, timeout=3)
+            r = requests.get(f"{config.LLM_URL}/v1/models", headers=headers, timeout=config.LLM_HEALTH_TIMEOUT)
         else:
-            r = requests.get(f"{config.LLM_URL}/api/tags", timeout=3)
+            r = requests.get(f"{config.LLM_URL}/api/tags", timeout=config.LLM_HEALTH_TIMEOUT)
         _state["llm"] = r.status_code == 200
         if _state["llm"]:
             print(f"  ✓ LLM 可达 ({config.LLM_MODEL})")
@@ -284,11 +284,36 @@ def update_document(doc_id: str, req: UpdateDocumentRequest):
 
 @app.delete("/api/documents/{doc_id}")
 def delete_document(doc_id: str):
-    """删除文档。"""
-    ok = wr.delete_document(doc_id)
-    if not ok:
-        raise HTTPException(404, f"文档 {doc_id} 删除失败")
-    return {"deleted": True, "doc_id": doc_id}
+    """删除文档及其关联边、版本快照、向量分块。"""
+    result = wr.delete_document(doc_id)
+    if not result.get("deleted"):
+        raise HTTPException(404, result.get("error", f"文档 {doc_id} 删除失败"))
+    # 同步删除向量库中的分块
+    try:
+        vec_deleted = zvec_client.delete_by_document_id(doc_id)
+        result["vector_chunks_removed"] = vec_deleted
+    except Exception as e:
+        result["vector_warning"] = str(e)
+    return result
+
+
+@app.post("/api/documents/check-duplicates")
+def check_duplicates(titles: list[str]):
+    """批量检查标题是否已有重复文档（用于编译前检测）。
+
+    请求体: ["标题1", "标题2", ...]
+    返回: {"duplicates": [{"title": "标题1", "doc_id": "...", "existing_title": "..."}, ...]}
+    """
+    duplicates = []
+    for title in titles:
+        dup = wr.check_duplicate(title)
+        if dup:
+            duplicates.append({
+                "title": title,
+                "doc_id": dup["id"],
+                "existing_title": dup["title"],
+            })
+    return {"duplicates": duplicates}
 
 
 @app.get("/api/documents/{doc_id}/export")
@@ -636,12 +661,12 @@ def extract(req: ExtractRequest):
         rid = doc["id"]
         for ent in result.get("entities", []):
             import re as _re
-            ent_key = _re.sub(r"[^A-Za-z0-9_]", "_", ent["name"].lower()).strip("_")
+            ent_key = wr._safe_key(ent["name"].lower())
             wr.ensure_entity(ent_key, ent["name"], ent.get("type"))
             wr.relate(rid, "mentions", f"entity:{ent_key}")
         for rel in result.get("relations", []):
-            from_key = _re.sub(r"[^A-Za-z0-9_]", "_", rel["from"].lower()).strip("_")
-            to_key = _re.sub(r"[^A-Za-z0-9_]", "_", rel["to"].lower()).strip("_")
+            from_key = wr._safe_key(rel["from"].lower())
+            to_key = wr._safe_key(rel["to"].lower())
             wr.relate(f"entity:{from_key}", "entity_related", f"entity:{to_key}")
         return {"extracted": result, "doc_id": rid}
     except llm.LLMError as e:

@@ -168,3 +168,42 @@ def cleanup() -> None:
     """删除集合、注销嵌入函数。"""
     _api("DELETE", f"/collections/{config.COLLECTION_NAME}")
     _api("DELETE", f"/embeddings/{config.EMBED_FUNC_NAME}")
+
+
+def delete_by_document_id(document_id: str) -> int:
+    """删除指定文档的所有向量分块。
+
+    通过 filter 表达式匹配 document_id 字段批量删除。
+    返回删除数量。
+    """
+    r = _api("POST", f"/collections/{config.COLLECTION_NAME}/documents/delete", json={
+        "filter": f"document_id == '{document_id}'",
+    })
+    if r.status_code != 200:
+        # 可能接口不支持 filter delete，尝试逐个删除
+        return _delete_by_document_id_fallback(document_id)
+    return r.json().get("count", 0)
+
+
+def _delete_by_document_id_fallback(document_id: str) -> int:
+    """fallback：先检索再逐个 ID 删除。"""
+    deleted = 0
+    try:
+        # 查询该文档的所有 chunk
+        r = _api("POST", f"/collections/{config.COLLECTION_NAME}/search", json={
+            "embedding": {"function": config.EMBED_FUNC_NAME, "field": config.VECTOR_FIELD},
+            "queries": [{"field_name": config.VECTOR_FIELD, "text": "dummy"}],
+            "topk": 1000,
+            "output_fields": ["document_id"],
+        })
+        if r.status_code == 200:
+            docs = r.json().get("documents", [])
+            for d in docs:
+                if d.get("fields", {}).get("document_id") == document_id:
+                    chunk_id = d.get("id", "")
+                    if chunk_id:
+                        _api("DELETE", f"/collections/{config.COLLECTION_NAME}/documents/{chunk_id}")
+                        deleted += 1
+    except Exception:
+        pass
+    return deleted

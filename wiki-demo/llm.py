@@ -117,7 +117,7 @@ def _call_llm(messages: list[dict], tools: list[dict] | None = None,
     """调用 LLM，返回原始 JSON 响应（失败抛 LLMError）。"""
     url, body, headers = _build_llm_request(messages, tools)
     body["temperature"] = temperature
-    r = requests.post(url, json=body, headers=headers, timeout=120)
+    r = requests.post(url, json=body, headers=headers, timeout=config.LLM_TIMEOUT)
     if r.status_code != 200:
         raise LLMError(
             f"LLM 调用失败 (模型 {config.LLM_MODEL}): ({r.status_code}) {r.text[:200]}"
@@ -171,7 +171,7 @@ def _call_llm_safe(messages: list[dict], tools: list[dict] | None = None,
     """调用 LLM，失败时抛 LLMError。"""
     url, body, headers = _build_llm_request(messages, tools)
     body["temperature"] = temperature
-    r = requests.post(url, json=body, headers=headers, timeout=120)
+    r = requests.post(url, json=body, headers=headers, timeout=config.LLM_TIMEOUT)
     if r.status_code != 200:
         raise LLMError(
             f"LLM 调用失败 (模型 {config.LLM_MODEL}): ({r.status_code}) {r.text[:200]}"
@@ -520,7 +520,7 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
 
     for i in range(max_iterations):
         url, body, headers = _build_llm_request(_to_provider_messages(messages), TOOL_DEFS)
-        r = requests.post(url, json=body, headers=headers, timeout=120)
+        r = requests.post(url, json=body, headers=headers, timeout=config.LLM_TIMEOUT)
 
         if r.status_code != 200:
             raise LLMError(
