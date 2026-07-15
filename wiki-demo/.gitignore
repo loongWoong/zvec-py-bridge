@@ -9,3 +9,4 @@ __pycache__/
 
 # 上传文件
 uploads/
+node_modules/

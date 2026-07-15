@@ -806,6 +806,9 @@ let focusNode = null;
 let graphSimulation = null;
 // 子图覆盖：图查询结果渲染时设置，null 表示用全图过滤数据
 let subgraphOverride = null;
+// 当前 SVG 的 zoom 行为与内容 <g>，需在 buildGraph 间保留以便 fitView 复用。
+let graphZoom = null;
+let graphG = null;
 
 const TYPE_COLORS = {document: '#1F6C9F', entity: '#6B3FA0', tag: '#956400', topic: '#346538', raw: '#787774', archive: '#9F2F2D', conversation: '#956400', version: '#A8A6A1'};
 const EDGE_COLORS = {
@@ -821,6 +824,11 @@ const EDGE_COLORS = {
 async function renderGraph() {
   const svgEl = document.getElementById('graph-svg');
   svgEl.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#A8A6A1">加载中...</text>';
+  // 全图重拉取时退出子图模式：避免上次图查询残留的 subgraphOverride
+  // 导致 buildGraph 仍渲染旧子图，看起来绘图区没有刷新。
+  subgraphOverride = null;
+  const resetBtn = document.getElementById('graph-reset-btn');
+  if (resetBtn) resetBtn.style.display = 'none';
   try {
     const r = await fetch(API + '/api/graph/full');
     const d = await r.json();
@@ -905,8 +913,29 @@ function getFilteredData() {
   return {nodes: visNodes, edges: visEdges};
 }
 
+// 切换到力导向布局并同步工具栏按钮高亮。
+// 「图查询 ▾」展开与「返回全图」默认以力导向重绘全图，
+// 避免沿用上次双击节点残留的 radial 等布局导致展示异常。
+function setLayoutButtons(layout) {
+  currentLayout = layout;
+  if (layout !== 'radial') focusNode = null;
+  document.querySelectorAll('.layout-group .layout-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.layout === layout));
+}
+function useForceLayout() {
+  setLayoutButtons('force');
+}
+
 function buildGraph() {
-  const {nodes, edges} = subgraphOverride || getFilteredData();
+  const raw = subgraphOverride || getFilteredData();
+  // 深拷贝 edges，防止 D3 forceLink 原地变异污染 subgraphOverride / graphData
+  const nodes = raw.nodes;
+  const edges = raw.edges.map(e => ({ source: e.source?.id || e.source, target: e.target?.id || e.target, type: e.type }));
+  // 计算当前子图的度（用干净的 edges）
+  const degMap = {};
+  edges.forEach(e => { degMap[e.source] = (degMap[e.source] || 0) + 1; degMap[e.target] = (degMap[e.target] || 0) + 1; });
+  nodes.forEach(n => { n.degree = degMap[n.id] || 0; });
+
   const svgEl = document.getElementById('graph-svg');
   const W = svgEl.clientWidth || 800, H = 560;
 
@@ -923,12 +952,12 @@ function buildGraph() {
   }
 
   const svg = d3.select('#graph-svg').attr('viewBox', `0 0 ${W} ${H}`);
-  // 缩放/平移
-  const g = svg.append('g');
-  const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (e) => {
-    g.attr('transform', e.transform);
+  // 缩放/平移：zoom 与内容 g 提升为模块级，便于布局后 fitView 自动居中。
+  graphG = svg.append('g');
+  graphZoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (e) => {
+    graphG.attr('transform', e.transform);
   });
-  svg.call(zoom);
+  svg.call(graphZoom);
 
   // 箭头 marker
   const showArrows = document.getElementById('show-arrows').checked;
@@ -942,7 +971,7 @@ function buildGraph() {
   });
 
   // 边
-  const link = g.append('g').attr('class', 'links').selectAll('line')
+  const link = graphG.append('g').attr('class', 'links').selectAll('line')
     .data(edges).enter().append('line')
     .attr('class', 'graph-link')
     .attr('stroke', d => EDGE_COLORS[d.type] || '#E2E0DC')
@@ -953,18 +982,18 @@ function buildGraph() {
   const showEdgeLabels = document.getElementById('show-edge-labels').checked;
   let edgeLabel = null;
   if (showEdgeLabels) {
-    edgeLabel = g.append('g').attr('class', 'edge-labels').selectAll('text')
+    edgeLabel = graphG.append('g').attr('class', 'edge-labels').selectAll('text')
       .data(edges).enter().append('text')
       .attr('class', 'graph-edge-label')
       .attr('text-anchor', 'middle').text(d => d.type);
   }
 
   // 节点
-  const node = g.append('g').attr('class', 'nodes').selectAll('g')
+  const node = graphG.append('g').attr('class', 'nodes').selectAll('g')
     .data(nodes).enter().append('g')
     .attr('class', 'graph-node')
     .call(d3.drag()
-      .on('start', (e, d) => { if (!e.active && graphSimulation) graphSimulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('start', (e, d) => { if (!e.active && graphSimulation) graphSimulation.alpha(1).alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
       .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
       .on('end', (e, d) => { if (!e.active && graphSimulation) graphSimulation.alphaTarget(0); })
     );
@@ -1034,24 +1063,29 @@ function buildGraph() {
     e.stopPropagation();
     if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
     focusNode = d.id;
-    currentLayout = 'radial';
-    document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('active', b.dataset.layout === 'radial'));
+    setLayoutButtons('radial');
     applyLayout(nodes, edges, W, H);
   });
 
-  // 应用布局
+  // 应用布局（currentLayout 可能因图查询/返回全图按钮的错误冒泡被清为 undefined，兜底 force）
+  if (!currentLayout || !['force', 'hierarchy', 'radial', 'cluster'].includes(currentLayout)) {
+    currentLayout = 'force';
+    document.querySelectorAll('.layout-group .layout-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.layout === 'force'));
+  }
   applyLayout(nodes, edges, W, H);
 
-  // 边标签位置更新
+  // 边标签位置更新：用 nodeMap 正确解析端点（兼容 D3 变异与字符串 ID）
   if (edgeLabel) {
+    const edgeNodeMap = new Map(nodes.map(n => [n.id, n]));
     edgeLabel.attr('x', d => {
-      const s = d.source?.id ? d.source : nodes.find(n => n.id === d.source);
-      const t = d.target?.id ? d.target : nodes.find(n => n.id === d.target);
-      return s && t ? (s.x + t.x) / 2 : 0;
+      const s = resolveEndpoint(d.source, edgeNodeMap);
+      const t = resolveEndpoint(d.target, edgeNodeMap);
+      return (s.x + t.x) / 2;
     }).attr('y', d => {
-      const s = d.source?.id ? d.source : nodes.find(n => n.id === d.source);
-      const t = d.target?.id ? d.target : nodes.find(n => n.id === d.target);
-      return s && t ? (s.y + t.y) / 2 : 0;
+      const s = resolveEndpoint(d.source, edgeNodeMap);
+      const t = resolveEndpoint(d.target, edgeNodeMap);
+      return (s.y + t.y) / 2;
     });
   }
 
@@ -1060,6 +1094,30 @@ function buildGraph() {
   // 子图模式下显示「返回全图」按钮
   const resetBtn = document.getElementById('graph-reset-btn');
   if (resetBtn) resetBtn.style.display = subgraphOverride ? '' : 'none';
+
+  // 布局完成后自动 fit-view：把当前子图/全图缩放居中到视口，
+  // 避免图查询后节点虽已重新布局但仍停留在旧视口坐标看不到。
+  fitView(W, H);
+}
+
+// 自动适配视口：根据当前内容 <g> 的包围盒计算缩放与平移，
+// 让整张图（子图或全图）居中显示。在每次 buildGraph 末尾调用。
+function fitView(W, H) {
+  if (!graphZoom || !graphG) return;
+  const svg = d3.select('#graph-svg');
+  let bounds;
+  try { bounds = graphG.node().getBBox(); } catch (e) { return; }
+  if (!bounds || !isFinite(bounds.width) || !isFinite(bounds.height)
+      || bounds.width <= 0 || bounds.height <= 0) return;
+  const scale = Math.min(
+    (W - 40) / bounds.width,
+    (H - 40) / bounds.height
+  ) * 0.9;
+  const clamped = Math.max(0.2, Math.min(4, scale));
+  const tx = W / 2 - (bounds.x + bounds.width / 2) * clamped;
+  const ty = H / 2 - (bounds.y + bounds.height / 2) * clamped;
+  svg.transition().duration(450)
+    .call(graphZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(clamped));
 }
 
 // ── 子图渲染：图查询结果驱动图谱 ──
@@ -1085,15 +1143,14 @@ function renderSubgraph(nodeIds, edges) {
   // 边做拷贝（防止 D3 forceLink 污染）
   const subEdges = edges.map(e => ({ source: e.source, target: e.target, type: e.type }));
   subgraphOverride = { nodes: subNodes, edges: subEdges };
-  currentLayout = 'force';
-  document.querySelectorAll('.layout-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.layout === 'force'));
+  useForceLayout();
   buildGraph();
 }
 
 // 返回全图模式
 function resetGraph() {
   subgraphOverride = null;
+  useForceLayout();
   buildGraph();
 }
 
@@ -1134,6 +1191,9 @@ function forceLayout(nodes, edges, W, H) {
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 4).strength(0.5));
   // 预热模拟：同步运行若干 tick，确保节点在首帧前已充分散开
   for (let i = 0; i < 500; i++) graphSimulation.tick();
+  // 预热后停止：让 buildGraph 末尾的 fitView 拿到稳定的包围盒，
+  // 否则模拟继续 tick 会让节点在 fitView 过渡期间漂移，视图无法对齐。
+  graphSimulation.stop();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
   updatePositions(nodes, edges);
 }
@@ -1159,6 +1219,7 @@ function hierarchyLayout(nodes, edges, W, H) {
     .force('y', d3.forceY(d => 40 + (levels[d.id]||0) / Math.max(1,maxLevel) * (H-80)).strength(0.2))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   for (let i = 0; i < 300; i++) graphSimulation.tick();
+  graphSimulation.stop();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
   updatePositions(nodes, edges);
 }
@@ -1201,6 +1262,7 @@ function radialLayout(nodes, edges, W, H) {
     .force('r', d3.forceRadial(d => d._dist === 0 ? 0 : (d._dist / Math.max(1,maxDist)) * Math.min(W,H)*0.4, cx, cy).strength(0.5))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   for (let i = 0; i < 300; i++) graphSimulation.tick();
+  graphSimulation.stop();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
   updatePositions(nodes, edges);
 }
@@ -1229,21 +1291,37 @@ function clusterLayout(nodes, edges, W, H) {
     .force('y', d3.forceY(d => cy + d._clusterR * Math.sin(d._clusterAngle)).strength(0.15))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
   for (let i = 0; i < 300; i++) graphSimulation.tick();
+  graphSimulation.stop();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
   updatePositions(nodes, edges);
 }
 
+function resolveEndpoint(ep, nodeMap) {
+  // ep 可能是 D3 已变异的节点对象引用，也可能是字符串 ID
+  if (typeof ep === 'object' && ep !== null) {
+    // 优先取已绑定的节点对象（含 D3 仿真的 x/y）
+    if (typeof ep.x === 'number' && isFinite(ep.x)) return ep;
+  }
+  // 否则按字符串 ID 在 nodeMap 中查找
+  const id = (typeof ep === 'object' && ep !== null) ? ep.id : ep;
+  if (typeof id === 'string' && nodeMap.has(id)) return nodeMap.get(id);
+  // 回退：已经是带 x/y 的对象
+  if (typeof ep === 'object' && ep !== null) return ep;
+  return { x: 0, y: 0 };
+}
+
 function updatePositions(nodes, edges) {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
   d3.select('#graph-svg').selectAll('.graph-link')
-    .attr('x1', d => (d.source?.id ? d.source : d.source).x)
-    .attr('y1', d => (d.source?.id ? d.source : d.source).y)
-    .attr('x2', d => (d.target?.id ? d.target : d.target).x)
-    .attr('y2', d => (d.target?.id ? d.target : d.target).y);
+    .attr('x1', d => resolveEndpoint(d.source, nodeMap).x)
+    .attr('y1', d => resolveEndpoint(d.source, nodeMap).y)
+    .attr('x2', d => resolveEndpoint(d.target, nodeMap).x)
+    .attr('y2', d => resolveEndpoint(d.target, nodeMap).y);
   d3.select('#graph-svg').selectAll('.graph-node')
     .attr('transform', d => `translate(${d.x},${d.y})`);
   d3.select('#graph-svg').selectAll('.edge-labels text')
-    .attr('x', d => ((d.source?.id ? d.source : d.source).x + (d.target?.id ? d.target : d.target).x) / 2)
-    .attr('y', d => ((d.source?.id ? d.source : d.source).y + (d.target?.id ? d.target : d.target).y) / 2);
+    .attr('x', d => (resolveEndpoint(d.source, nodeMap).x + resolveEndpoint(d.target, nodeMap).x) / 2)
+    .attr('y', d => (resolveEndpoint(d.source, nodeMap).y + resolveEndpoint(d.target, nodeMap).y) / 2);
 }
 
 function graphNodeClick(nodeId) {
@@ -1263,12 +1341,12 @@ function graphNodeClick(nodeId) {
 }
 
 // 布局切换按钮
-document.querySelectorAll('.layout-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentLayout = btn.dataset.layout;
-    if (currentLayout !== 'radial') focusNode = null;
+// 仅 .layout-group 内的四个布局按钮绑定此事件；
+// "图查询 ▸" 和 "返回全图" 虽也是 .layout-btn，但由各自的 onclick 独立处理，不走此泛型监听器。
+document.querySelectorAll('.layout-group .layout-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setLayoutButtons(btn.dataset.layout);
     buildGraph();
   });
 });
@@ -1563,15 +1641,15 @@ function toggleGraphQuery() {
   el.style.display = isHidden ? 'block' : 'none';
   btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
   if (isHidden) {
-    // 展开图查询面板时：退出子图模式 + 重新拉取全图数据并刷新绘图区域。
-    // 面板展开会改变容器布局，需在 DOM 更新后重新计算尺寸并重绘。
+    // 展开图查询面板时立即以力导向重绘全图：退出子图模式 + 清除 focusNode。
+    // 面板 display:block 后浏览器尚未完成布局，svgEl.clientWidth 可能仍是旧值，
+    // 用 requestAnimationFrame 等一帧再 buildGraph，确保拿到正确的容器尺寸。
+    // 不重复调用 renderGraph（会异步 fetch 并二次 buildGraph），避免两次 fitView 过渡冲突。
     subgraphOverride = null;
     const resetBtn = document.getElementById('graph-reset-btn');
     if (resetBtn) resetBtn.style.display = 'none';
-    // 先同步重绘一次（用已有数据，适配面板展开后的新尺寸），
-    // 再异步拉取最新数据刷新。
-    buildGraph();
-    renderGraph();
+    useForceLayout();
+    requestAnimationFrame(() => buildGraph());
   }
 }
 
