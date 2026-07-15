@@ -825,6 +825,8 @@ async function renderGraph() {
     const r = await fetch(API + '/api/graph/full');
     const d = await r.json();
     graphData = {nodes: d.nodes || [], edges: d.edges || []};
+    // 清除可搜索下拉框的旧状态，使其在 initSearchableSelects 时重新初始化
+    Object.keys(ssState).forEach(k => delete ssState[k]);
     // 计算度数
     const degreeMap = {};
     graphData.edges.forEach(e => {
@@ -1110,25 +1112,30 @@ function applyLayout(nodes, edges, W, H) {
 function forceLayout(nodes, edges, W, H) {
   if (graphSimulation) graphSimulation.stop();
   const nodeCount = nodes.length;
-  // 斥力强度随节点数自适应：节点越多斥力越强，确保散开
-  const chargeStrength = -Math.max(200, nodeCount * 8);
+  // 斥力强度：节点越多单节点斥力越小，避免整体炸散飞出视口
+  const chargeStrength = -Math.max(120, Math.min(250, 1500 / Math.sqrt(nodeCount)));
   // 链接距离随节点数自适应
-  const linkDistance = Math.max(70, Math.min(160, nodeCount * 2.5));
+  const linkDistance = Math.max(60, Math.min(120, nodeCount * 2));
   // 每次力导向布局都重新随机分布初始位置 + 清零速度，
   // 避免上一次模拟残留的 x/y/vx/vy 导致节点堆叠在一点。
-  const spread = Math.min(W, 600);
+  const spread = Math.min(W * 0.7, 400);
   nodes.forEach(n => {
     n.x = W / 2 + (Math.random() - 0.5) * spread;
-    n.y = H / 2 + (Math.random() - 0.5) * Math.min(H, 400);
+    n.y = H / 2 + (Math.random() - 0.5) * Math.min(H * 0.7, 300);
     n.vx = 0; n.vy = 0;
   });
   graphSimulation = d3.forceSimulation(nodes)
-    .alpha(1).alphaDecay(0.02)
-    .force('link', d3.forceLink(edges).id(d => d.id).distance(linkDistance).strength(0.15))
-    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(800))
-    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.04))
-    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 8).strength(0.8));
+    .alpha(1).alphaDecay(0.01)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(linkDistance).strength(0.3))
+    .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(200))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.06))
+    .force('x', d3.forceX(W / 2).strength(0.06))
+    .force('y', d3.forceY(H / 2).strength(0.06))
+    .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 4).strength(0.5));
+  // 预热模拟：同步运行若干 tick，确保节点在首帧前已充分散开
+  for (let i = 0; i < 500; i++) graphSimulation.tick();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
+  updatePositions(nodes, edges);
 }
 
 function hierarchyLayout(nodes, edges, W, H) {
@@ -1151,7 +1158,9 @@ function hierarchyLayout(nodes, edges, W, H) {
     .force('x', d3.forceX(d => W/2).strength(0.03))
     .force('y', d3.forceY(d => 40 + (levels[d.id]||0) / Math.max(1,maxLevel) * (H-80)).strength(0.2))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
+  for (let i = 0; i < 300; i++) graphSimulation.tick();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
+  updatePositions(nodes, edges);
 }
 
 function radialLayout(nodes, edges, W, H) {
@@ -1191,7 +1200,9 @@ function radialLayout(nodes, edges, W, H) {
     .force('charge', d3.forceManyBody().strength(-120).distanceMax(300))
     .force('r', d3.forceRadial(d => d._dist === 0 ? 0 : (d._dist / Math.max(1,maxDist)) * Math.min(W,H)*0.4, cx, cy).strength(0.5))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
+  for (let i = 0; i < 300; i++) graphSimulation.tick();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
+  updatePositions(nodes, edges);
 }
 
 function clusterLayout(nodes, edges, W, H) {
@@ -1217,7 +1228,9 @@ function clusterLayout(nodes, edges, W, H) {
     .force('x', d3.forceX(d => cx + d._clusterR * Math.cos(d._clusterAngle)).strength(0.15))
     .force('y', d3.forceY(d => cy + d._clusterR * Math.sin(d._clusterAngle)).strength(0.15))
     .force('collide', d3.forceCollide().radius(d => Math.max(8, 4 + d.degree * 0.8) + 6).strength(0.7));
+  for (let i = 0; i < 300; i++) graphSimulation.tick();
   graphSimulation.on('tick', () => updatePositions(nodes, edges));
+  updatePositions(nodes, edges);
 }
 
 function updatePositions(nodes, edges) {
@@ -1549,7 +1562,17 @@ function toggleGraphQuery() {
   const isHidden = el.style.display === 'none';
   el.style.display = isHidden ? 'block' : 'none';
   btn.textContent = isHidden ? '图查询 ▾' : '图查询 ▸';
-  if (isHidden) initSearchableSelects();
+  if (isHidden) {
+    // 展开图查询面板时：退出子图模式 + 重新拉取全图数据并刷新绘图区域。
+    // 面板展开会改变容器布局，需在 DOM 更新后重新计算尺寸并重绘。
+    subgraphOverride = null;
+    const resetBtn = document.getElementById('graph-reset-btn');
+    if (resetBtn) resetBtn.style.display = 'none';
+    // 先同步重绘一次（用已有数据，适配面板展开后的新尺寸），
+    // 再异步拉取最新数据刷新。
+    buildGraph();
+    renderGraph();
+  }
 }
 
 // 节点 ID → 友好标签
