@@ -3,7 +3,7 @@
 RAG 知识库 Web 应用
 ====================
 
-提供可交互的 Web 界面，通过 zvec REST Bridge + Ollama qwen3-embedding:4b
+提供可交互的 Web 界面，通过 zvec REST Bridge + Ollama qwen3-embedding
 实现完整的 RAG 知识库体验：知识入库 → 语义检索 → 生成回答。
 
 启动方式
@@ -15,7 +15,7 @@ RAG 知识库 Web 应用
 前置条件
 --------
 1. zvec REST Bridge 服务已启动（默认 http://localhost:8666）
-2. Ollama 已运行且已拉取 qwen3-embedding:4b 模型
+2. Ollama 已运行且已拉取 qwen3-embedding 模型（默认 0.6b，维度 1024）
 3. 服务端已安装 openai 依赖（pip install openai）
 """
 from __future__ import annotations
@@ -55,35 +55,68 @@ _state: dict = {
 
 @app.on_event("startup")
 def startup():
-    """启动时检查是否已有持久化的知识库，避免每次重启都重新初始化。"""
+    """启动时检查是否已有持久化的知识库，避免每次重启都重新初始化。
+
+    嵌入模型的输出维度由模型本身决定（0.6b=1024、4b=2560），
+    切换模型后维度会变化。因此维度必须实时从 Ollama 探测，不能信任
+    持久化状态里的旧值——否则会与 zvec 集合已固化的维度不匹配，
+    导致「Dimension mismatch: expected X, got Y」入库失败。
+    """
     os.makedirs(agent.UPLOADS_DIR, exist_ok=True)
     extra = agent.load_state()
-    if extra is not None:
-        # 本体已从磁盘恢复，验证 zvec 集合是否仍然存在
-        try:
-            r = kb.zvec_api("GET", f"/collections/{kb.COLLECTION_NAME}", timeout=5)
-            if r.status_code == 200:
-                # 集合存在，但嵌入函数注册是内存态（zvec 重启后丢失），需重新注册
-                dimension = extra.get("dimension", 2560)
-                try:
-                    kb.register_embedding(dimension)
-                    print(f"  嵌入函数已重新注册 (dimension={dimension})")
-                except Exception as e:
-                    print(f"  ⚠ 嵌入函数注册失败: {e}，请检查 Ollama 是否运行")
-                _state["initialized"] = True
-                _state["dimension"] = dimension
-                _state["doc_count"] = len(agent.DOCUMENTS)
-                _state["upload_count"] = extra.get("upload_count", 0)
-                print(f"  知识库已从持久化状态恢复：{len(agent.DOCUMENTS)} 篇文档")
-                return
-        except Exception:
-            pass
-        # zvec 集合不存在，清除过期状态
+    if extra is None:
+        print("  未找到持久化状态，需要初始化知识库")
+        return
+
+    # 本体已从磁盘恢复，验证 zvec 集合是否仍然存在
+    try:
+        r = kb.zvec_api("GET", f"/collections/{kb.COLLECTION_NAME}", timeout=5)
+        collection_exists = r.status_code == 200
+    except Exception:
+        collection_exists = False
+
+    if not collection_exists:
         agent.clear_state()
         agent.reset()
         print("  持久化状态已失效（zvec 集合不存在），需要重新初始化")
+        return
+
+    # 实时探测当前嵌入模型的真实维度（不信任持久化里的旧值）
+    try:
+        actual_dim = kb.discover_dimension()
+    except Exception as e:
+        print(f"  ⚠ 无法探测嵌入维度: {e}，请检查 Ollama 是否运行")
+        # Ollama 不可用时仍尝试用持久化值，等用户手动处理
+        actual_dim = extra.get("dimension", 0)
+
+    coll_dim = kb.get_collection_dimension()
+    if coll_dim is not None and coll_dim != actual_dim:
+        # 模型已切换（如 4b→0.6b），旧集合维度与新模型不匹配，必须重建。
+        # 重建后原向量全部失效，需从已恢复的本体（含上传文档）重新入库，
+        # 避免用户上传的文档丢失。
+        print(f"  ⚠ 维度不匹配：集合={coll_dim}，当前模型={actual_dim}，重建集合...")
+        try:
+            kb.register_embedding(actual_dim)
+            kb.create_collection(actual_dim)
+            count = kb.reingest_all(agent.DOCUMENTS)
+            print(f"  集合已重建 (dimension={actual_dim})，已重新入库 {count} 个分块")
+        except Exception as e:
+            print(f"  ⚠ 集合重建失败: {e}，请手动初始化")
     else:
-        print("  未找到持久化状态，需要初始化知识库")
+        # 维度一致，仅需重新注册嵌入函数（zvec 重启后注册是内存态会丢失）
+        try:
+            kb.register_embedding(actual_dim)
+            print(f"  嵌入函数已重新注册 (dimension={actual_dim})")
+        except Exception as e:
+            print(f"  ⚠ 嵌入函数注册失败: {e}，请检查 Ollama 是否运行")
+
+    _state["initialized"] = True
+    _state["dimension"] = actual_dim
+    _state["doc_count"] = len(agent.DOCUMENTS)
+    _state["upload_count"] = extra.get("upload_count", 0)
+    # 同步最新维度回持久化状态
+    agent.save_state({"dimension": actual_dim, "upload_count": _state["upload_count"]})
+    print(f"  知识库已从持久化状态恢复：{len(agent.DOCUMENTS)} 篇文档")
 
 
 # ====================================================================== #

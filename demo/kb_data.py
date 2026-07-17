@@ -13,7 +13,7 @@ import requests
 # ====================================================================== #
 ZVEC_URL = os.environ.get("ZVEC_URL", "http://localhost:8666")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:0.6b")
+EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:4b")
 OCR_MODEL = os.environ.get("OCR_MODEL", "glm-ocr")    # OCR 识别用（依赖 Ollama 原生接口）
 OCR_URL = os.environ.get("OCR_URL", OLLAMA_URL)        # OCR 服务地址（默认复用 Ollama）
 
@@ -203,7 +203,12 @@ def check_health() -> dict:
 
 
 def discover_dimension() -> int:
-    """直接调用 Ollama embed 接口获取模型输出维度。"""
+    """直接调用 Ollama embed 接口获取模型输出维度。
+
+    嵌入模型的输出维度由模型本身决定（如 qwen3-embedding:0.6b=1024，
+    qwen3-embedding:4b=2560），切换模型后维度会变化。因此维度必须实时探测，
+    不能依赖历史持久化值，否则会与 zvec 集合已固化的维度不匹配。
+    """
     r = requests.post(f"{OLLAMA_URL}/api/embed", json={
         "model": EMBED_MODEL,
         "input": "维度探测样本",
@@ -215,6 +220,17 @@ def discover_dimension() -> int:
     if dim == 0:
         raise KBError("Ollama 返回空向量")
     return dim
+
+
+def get_collection_dimension() -> int | None:
+    """查询已存在的集合向量维度；集合不存在时返回 None。"""
+    r = zvec_api("GET", f"/collections/{COLLECTION_NAME}", timeout=5)
+    if r.status_code != 200:
+        return None
+    vectors = r.json().get("schema", {}).get("vectors", [])
+    if not vectors:
+        return None
+    return vectors[0].get("dimension")
 
 
 def register_embedding(dimension: int) -> None:
@@ -293,6 +309,39 @@ def ingest_corpus() -> int:
         for doc in CORPUS
     ]
     return ingest_documents(documents)
+
+
+def reingest_all(documents: list[dict]) -> int:
+    """将已恢复的本体文档（内置语料 + 上传文档）重新入库到新集合。
+
+    模型切换导致维度变化、集合重建后，原先已入库的向量全部失效。
+    本函数从本体（agent.DOCUMENTS，已从持久化状态恢复）重建入库文档列表，
+    按与 ingest_documents 一致的字段格式重新嵌入，避免上传文档丢失。
+
+    documents: [{document_id, title, chunks:[{chunk_id, heading, content, ordinal}], ...}]
+    返回插入数量。
+    """
+    to_ingest: list[dict] = []
+    for doc in documents:
+        doc_id = doc["document_id"]
+        for chunk in doc.get("chunks", []):
+            chunk_id = chunk["chunk_id"]
+            heading = chunk.get("heading", "")
+            content = chunk["content"]
+            embed_text = f"{heading}。{content}" if heading else content
+            to_ingest.append({
+                "id": chunk_id,
+                "text": embed_text,
+                "fields": {
+                    "title": doc["title"],
+                    "content": content,
+                    "heading": heading,
+                    "document_id": doc_id,
+                },
+            })
+    if not to_ingest:
+        return 0
+    return ingest_documents(to_ingest)
 
 
 def search(query: str, topk: int = 3) -> list[dict]:
