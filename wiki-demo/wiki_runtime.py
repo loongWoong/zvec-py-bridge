@@ -1059,74 +1059,102 @@ def version_chain(doc_id: str) -> list[dict]:
 # ====================================================================== #
 #  Search Service — 四路融合检索（对应 design.md 第九节）
 # ====================================================================== #
-def search_documents(query: str, topk: int = 5) -> dict:
-    """四路融合检索：向量 + 全文 + 图 + 元数据。
+def search_documents(query: str, topk: int = 5,
+                     use_rerank: bool = True,
+                     concept_ids: list[str] | None = None) -> dict:
+    """四路并行融合检索：向量 + 全文 + 图 + 元数据 → Re-Rank 精排。
 
     返回 {
         "query": str,
-        "results": [{doc_id, title, score, sources: [str], excerpt}, ...],
+        "results": [{doc_id, title, score, final_score, sources, excerpt}, ...],
         "routes": {"vector": N, "fts": N, "graph": N, "meta": N}
     }
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+
     routes_count = {"vector": 0, "fts": 0, "graph": 0, "meta": 0}
-    # 每路返回 (doc_id, rank_score) 列表；rank_score = 1/(60+rank)
-    ranked: dict[str, dict] = {}  # doc_id -> {score, sources:set, title, excerpt}
+    all_candidates: list[dict] = []
+    lock = threading.Lock()
 
-    def _add(doc_id: str, source: str, rank: int, title: str = "", excerpt: str = ""):
+    def _collect_route(name: str, fn, *args):
+        try:
+            results = fn(*args)
+            with lock:
+                routes_count[name] = len(results)
+            return results
+        except Exception as e:
+            print(f"  ⚠ {name}检索失败: {e}")
+            return []
+
+    # ── 四路并行检索（P0-2）──
+    futures_map: dict = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures_map[executor.submit(_collect_route, "vector", _search_vector, query, topk)] = "vector"
+        futures_map[executor.submit(_collect_route, "fts", _fts_search, query, topk)] = "fts"
+        futures_map[executor.submit(_collect_route, "graph", _graph_search, query, topk)] = "graph"
+        futures_map[executor.submit(_collect_route, "meta", _metadata_search, query, topk)] = "meta"
+
+        for future in as_completed(futures_map):
+            name = futures_map[future]
+            try:
+                route_results = future.result()
+                for r in route_results:
+                    r["_route"] = name
+                all_candidates.extend(route_results)
+            except Exception:
+                pass
+
+    # ── Re-Rank 精排（P0-1）：替代简单 RRF ──
+    if use_rerank and all_candidates:
+        try:
+            import reranker
+            # 先做 RRF 粗排（保留作为 original_score）
+            rrf_ranked: dict[str, dict] = {}
+            for rank, c in enumerate(all_candidates):
+                did = c.get("doc_id", "")
+                if not did:
+                    continue
+                route = c.pop("_route", "")
+                rrf = 1.0 / (60 + rank)
+                if did not in rrf_ranked:
+                    rrf_ranked[did] = {"score": 0.0, "sources": set(), "title": c.get("title", ""), "excerpt": c.get("excerpt", "")}
+                rrf_ranked[did]["score"] += rrf
+                if route:
+                    rrf_ranked[did]["sources"].add(route)
+
+            candidates_for_rerank = [
+                {
+                    "doc_id": did,
+                    "title": info["title"],
+                    "excerpt": info["excerpt"],
+                    "score": round(info["score"], 4),
+                    "sources": sorted(info["sources"]),
+                }
+                for did, info in rrf_ranked.items()
+            ]
+
+            reranked = reranker.rerank(candidates_for_rerank, query, topk=topk,
+                                       target_concept_ids=concept_ids)
+            return {"query": query, "results": reranked, "routes": routes_count,
+                    "reranked": True}
+        except Exception as e:
+            print(f"  ⚠ Re-Rank 失败，降级到 RRF: {e}")
+
+    # ── 降级：简单 RRF 融合 ──
+    ranked: dict[str, dict] = {}
+    for rank, c in enumerate(all_candidates):
+        did = c.get("doc_id", "")
+        if not did:
+            continue
+        route = c.pop("_route", "")
         rrf = 1.0 / (60 + rank)
-        if doc_id not in ranked:
-            ranked[doc_id] = {"score": 0.0, "sources": set(), "title": title, "excerpt": excerpt}
-        ranked[doc_id]["score"] += rrf
-        ranked[doc_id]["sources"].add(source)
-        if title and not ranked[doc_id]["title"]:
-            ranked[doc_id]["title"] = title
-        if excerpt and not ranked[doc_id]["excerpt"]:
-            ranked[doc_id]["excerpt"] = excerpt
+        if did not in ranked:
+            ranked[did] = {"score": 0.0, "sources": set(), "title": c.get("title", ""), "excerpt": c.get("excerpt", "")}
+        ranked[did]["score"] += rrf
+        if route:
+            ranked[did]["sources"].add(route)
 
-    # ── ① 向量路（zvec）──
-    try:
-        chunks = zvec_client.search(query, topk=topk)
-        routes_count["vector"] = len(chunks)
-        seen_docs: set[str] = set()
-        rank = 0
-        for ch in chunks:
-            did = ch.get("document_id", "")
-            if not did or did in seen_docs:
-                continue
-            seen_docs.add(did)
-            _add(did, "vector", rank, ch.get("title", ""), ch.get("content", "")[:120])
-            rank += 1
-    except Exception as e:
-        print(f"  ⚠ 向量检索失败: {e}")
-
-    # ── ② 全文检索路（SurrealDB，降级为 CONTAINS 子串匹配）──
-    try:
-        fts_docs = _fts_search(query, topk)
-        routes_count["fts"] = len(fts_docs)
-        for rank, d in enumerate(fts_docs):
-            _add(d["doc_id"], "fts", rank, d.get("title", ""), d.get("excerpt", ""))
-    except Exception as e:
-        print(f"  ⚠ 全文检索失败: {e}")
-
-    # ── ③ 图遍历路（query 命中实体 → mentions 反查文档）──
-    try:
-        graph_docs = _graph_search(query, topk)
-        routes_count["graph"] = len(graph_docs)
-        for rank, d in enumerate(graph_docs):
-            _add(d["doc_id"], "graph", rank, d.get("title", ""), d.get("excerpt", ""))
-    except Exception as e:
-        print(f"  ⚠ 图检索失败: {e}")
-
-    # ── ④ 元数据路（解析 author=/topic= 等结构化条件）──
-    try:
-        meta_docs = _metadata_search(query, topk)
-        routes_count["meta"] = len(meta_docs)
-        for rank, d in enumerate(meta_docs):
-            _add(d["doc_id"], "meta", rank, d.get("title", ""), d.get("excerpt", ""))
-    except Exception as e:
-        print(f"  ⚠ 元数据检索失败: {e}")
-
-    # 合并排序
     results = []
     for doc_id, info in sorted(ranked.items(), key=lambda x: -x[1]["score"]):
         results.append({
@@ -1138,6 +1166,28 @@ def search_documents(query: str, topk: int = 5) -> dict:
         })
 
     return {"query": query, "results": results[:topk], "routes": routes_count}
+
+
+def _search_vector(query: str, topk: int) -> list[dict]:
+    """向量检索（zvec）。"""
+    try:
+        chunks = zvec_client.search(query, topk=topk)
+    except Exception:
+        return []
+    seen: set[str] = set()
+    results = []
+    for ch in chunks:
+        did = ch.get("document_id", "")
+        if not did or did in seen:
+            continue
+        seen.add(did)
+        results.append({
+            "doc_id": did,
+            "title": ch.get("title", ""),
+            "excerpt": ch.get("content", "")[:120],
+            "vector_similarity": ch.get("score", 0),
+        })
+    return results
 
 
 def _fts_search(query: str, topk: int) -> list[dict]:

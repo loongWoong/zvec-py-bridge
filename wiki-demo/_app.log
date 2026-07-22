@@ -1,0 +1,111 @@
+F:\Claude\zvec-py-bridge\wiki-demo\app.py:63: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+INFO:     Started server process [28256]
+INFO:     Waiting for application startup.
+============================================================
+  Semantic Wiki Runtime 启动中...
+============================================================
+  ⚠ Schema 语句跳过: DEFINE TABLE document SCHEMALESS... → The table 'document' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD title    ON document TYPE string... → The field 'title' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD summary  ON document TYPE option<string>... → The field 'summary' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD content  ON document TYPE string... → The field 'content' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD topic_id ON document TYPE option<string>... → The field 'topic_id' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD author   ON document TYPE option<string>... → The field 'author' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD status   ON document TYPE string DEFAULT 'activ... → The field 'status' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD version  ON document TYPE int DEFAULT 1... → The field 'version' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD created  ON document TYPE datetime DEFAULT time... → The field 'created' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD updated  ON document TYPE datetime DEFAULT time... → The field 'updated' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD concept_ids ON document TYPE option<array>... → The field 'concept_ids' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE raw SCHEMALESS... → The table 'raw' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD url       ON raw TYPE option<string>... → The field 'url' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD author    ON raw TYPE option<string>... → The field 'author' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD published ON raw TYPE option<datetime>... → The field 'published' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD content   ON raw TYPE string... → The field 'content' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD collected  ON raw TYPE datetime DEFAULT time::n... → The field 'collected' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE topic SCHEMALESS... → The table 'topic' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD name        ON topic TYPE string... → The field 'name' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD description ON topic TYPE option<string>... → The field 'description' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE tag SCHEMALESS... → The table 'tag' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD name      ON tag TYPE string... → The field 'name' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD parent_id ON tag TYPE option<string>... → The field 'parent_id' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE entity SCHEMALESS... → The table 'entity' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD name ON entity TYPE string... → The field 'name' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD type ON entity TYPE option<string>... → The field 'type' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE version SCHEMALESS... → The table 'version' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD doc_id    ON version TYPE string... → The field 'doc_id' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD title     ON version TYPE string... → The field 'title' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD content   ON version TYPE string... → The field 'content' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD summary   ON version TYPE option<string>... → The field 'summary' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD version   ON version TYPE int... → The field 'version' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD snapshot  ON version TYPE datetime DEFAULT time... → The field 'snapshot' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE archive SCHEMALESS... → The table 'archive' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD title    ON archive TYPE string... → The field 'title' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD content  ON archive TYPE string... → The field 'content' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD source   ON archive TYPE option<string>... → The field 'source' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD archived ON archive TYPE datetime DEFAULT time:... → The field 'archived' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE conversation SCHEMALESS... → The table 'conversation' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD question ON conversation TYPE string... → The field 'question' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD answer   ON conversation TYPE option<string>... → The field 'answer' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD created  ON conversation TYPE datetime DEFAULT ... → The field 'created' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE belongs_to  TYPE RELATION FROM document TO topi... → The table 'belongs_to' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE has_tag     TYPE RELATION FROM document TO tag ... → The table 'has_tag' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE mentions   TYPE RELATION FROM document TO entit... → The table 'mentions' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE references TYPE RELATION FROM document TO raw S... → The table 'references' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE related     TYPE RELATION FROM document TO docu... → The table 'related' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE depends    TYPE RELATION FROM document TO docum... → The table 'depends' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE extends    TYPE RELATION FROM document TO docum... → The table 'extends' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE implements TYPE RELATION FROM document TO docum... → The table 'implements' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE contradicts TYPE RELATION FROM document TO docu... → The table 'contradicts' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE supersedes TYPE RELATION FROM document TO docum... → The table 'supersedes' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE duplicates    TYPE RELATION FROM document TO do... → The table 'duplicates' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE same_topic    TYPE RELATION FROM document TO do... → The table 'same_topic' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE derived_from  TYPE RELATION FROM document TO do... → The table 'derived_from' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE archived_from TYPE RELATION FROM document TO ar... → The table 'archived_from' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE child_of   TYPE RELATION FROM tag TO tag SCHEMA... → The table 'child_of' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE entity_related TYPE RELATION FROM entity TO ent... → The table 'entity_related' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE previous_version TYPE RELATION FROM version TO ... → The table 'previous_version' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE updated_by TYPE RELATION FROM document TO raw S... → The table 'updated_by' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE about TYPE RELATION FROM conversation TO docume... → The table 'about' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE concept SCHEMALESS... → The table 'concept' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD name        ON concept TYPE string... → The field 'name' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD description ON concept TYPE option<string>... → The field 'description' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD type        ON concept TYPE option<string>... → The field 'type' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD parent_id   ON concept TYPE option<string>... → The field 'parent_id' already existsINFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8090 (Press CTRL+C to quit)
+
+  ⚠ Schema 语句跳过: DEFINE TABLE concept_related TYPE RELATION FROM concept TO c... → The table 'concept_related' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD relation_type ON concept_related TYPE option<st... → The field 'relation_type' already exists
+  ⚠ Schema 语句跳过: DEFINE TABLE concept_binding TYPE RELATION FROM concept TO d... → The table 'concept_binding' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD binding_type ON concept_binding TYPE option<str... → The field 'binding_type' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD file_path   ON concept_binding TYPE option<stri... → The field 'file_path' already exists
+  ⚠ Schema 语句跳过: DEFINE FIELD function_name ON concept_binding TYPE option<st... → The field 'function_name' already exists
+  ✓ SurrealDB 已连接 (file://wiki_data.db)
+  ✓ zvec REST Bridge 可达 (v0.5.1)
+  ✓ Ollama 可达 (embed: qwen3-embedding:0.6b)
+  ✓ LLM 可达 (hy3)
+  ✓ 种子数据已存在，跳过 (16 篇文档)
+============================================================
+  访问 http://localhost:8090
+============================================================
+INFO:     127.0.0.1:59014 - "GET /api/ontology/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59015 - "GET /api/ontology/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59115 - "GET /api/ontology/concepts/concept%3Aattention/expand?depth=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59116 - "GET /api/ontology/concepts?concept_type=mechanism HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59152 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59153 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56069 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56069 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56761 - "GET /api/documents?limit=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56761 - "GET /api/ontology/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56069 - "GET /api/ontology/graph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58352 - "GET /api/ontology/concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62640 - "GET /api/ontology/export HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62887 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62888 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55386 - "GET /api/ontology/concepts/concept%3Adecoder/expand?depth=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55386 - "GET /api/ontology/concepts/concept%3Aencoder/expand?depth=2 HTTP/1.1" 200 OK

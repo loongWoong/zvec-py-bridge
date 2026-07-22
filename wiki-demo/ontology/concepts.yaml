@@ -1,0 +1,281 @@
+# 种子本体 — 基于 LLM/向量检索领域的核心概念
+# 由 LLM 辅助提取，人工 review 后导入
+# 导入方式：ontology.import_from_yaml("ontology/concepts.yaml")
+
+concepts:
+  # === 机制层 ===
+  - name: Attention
+    type: mechanism
+    description: 注意力机制，允许模型动态关注输入序列不同部分
+    bindings:
+      - document: Attention
+        type: primary
+      - document: Transformer
+        type: secondary
+
+  - name: Self-Attention
+    type: mechanism
+    description: 自注意力机制，Q/K/V 来自同一输入的注意力变体
+    parent: Attention
+    bindings:
+      - document: Transformer
+        type: primary
+      - document: Attention
+        type: secondary
+
+  - name: Multi-Head Attention
+    type: mechanism
+    description: 多头注意力，并行计算多个注意力头后拼接
+    parent: Self-Attention
+    relations:
+      - target: Attention
+        type: contains
+        direction: in
+
+  - name: Positional Encoding
+    type: mechanism
+    description: 位置编码，向输入嵌入注入序列位置信息
+    bindings:
+      - document: Transformer
+        type: primary
+
+  - name: Layer Normalization
+    type: mechanism
+    description: 层归一化，标准化每层的激活值
+    bindings:
+      - document: Transformer
+        type: secondary
+
+  - name: Residual Connection
+    type: mechanism
+    description: 残差连接，跳跃连接防止梯度消失
+    bindings:
+      - document: Transformer
+        type: secondary
+
+  - name: Masked Language Modeling
+    type: mechanism
+    description: 掩码语言建模，随机遮蔽输入标记让模型预测
+    bindings:
+      - document: BERT
+        type: primary
+
+  # === 组件层 ===
+  - name: Encoder
+    type: component
+    description: Transformer 编码器，将输入编码为连续表示
+    relations:
+      - target: Self-Attention
+        type: depends
+    bindings:
+      - document: Transformer
+        type: primary
+      - document: BERT
+        type: secondary
+
+  - name: Decoder
+    type: component
+    description: Transformer 解码器，自回归生成输出序列
+    relations:
+      - target: Self-Attention
+        type: depends
+    bindings:
+      - document: Transformer
+        type: primary
+
+  # === 流程层 ===
+  - name: Fine-tuning
+    type: process
+    description: 在预训练模型上用领域数据继续训练
+    bindings:
+      - document: Fine-tuning
+        type: primary
+      - document: BERT
+        type: secondary
+
+  - name: Full Fine-tuning
+    type: process
+    description: 全量微调，更新所有参数
+    parent: Fine-tuning
+
+  - name: LoRA
+    type: process
+    description: 低秩适配微调，只训练低秩矩阵
+    parent: Fine-tuning
+    relations:
+      - target: Full Fine-tuning
+        type: contrasts
+
+  - name: QLoRA
+    type: process
+    description: 量化 LoRA，进一步降低显存需求
+    parent: LoRA
+
+  - name: RAG Pipeline
+    type: process
+    description: 检索增强生成管道：检索→拼上下文→LLM 生成
+    bindings:
+      - document: RAG
+        type: primary
+    relations:
+      - target: Embedding
+        type: depends
+      - target: Vector Database
+        type: depends
+
+  # === 算法层 ===
+  - name: HNSW
+    type: mechanism
+    description: 分层可导航小世界图索引，多层图加速 ANN
+    bindings:
+      - document: HNSW
+        type: primary
+      - document: 向量数据库
+        type: secondary
+
+  - name: ANN
+    type: algorithm
+    description: 近似最近邻搜索，在海量向量中快速找近似解
+    parent: HNSW
+    relations:
+      - target: HNSW
+        type: contains
+        direction: in
+
+  - name: IVF
+    type: mechanism
+    description: 倒排文件索引，先聚类再在簇内搜索
+    relations:
+      - target: HNSW
+        type: contrasts
+
+  # === 度量层 ===
+  - name: Cosine Similarity
+    type: metric
+    description: 余弦相似度，测量向量夹角
+    bindings:
+      - document: Embedding
+        type: secondary
+
+  - name: Euclidean Distance
+    type: metric
+    description: 欧氏距离，测量向量直线距离
+    relations:
+      - target: Cosine Similarity
+        type: contrasts
+
+  - name: Inner Product
+    type: metric
+    description: 向量内积，归一化后等价于余弦相似度
+    relations:
+      - target: Cosine Similarity
+        type: related
+
+  # === 基础设施层 ===
+  - name: Vector Database
+    type: infrastructure
+    description: 向量数据库，存储和检索高维向量的专用数据库
+    bindings:
+      - document: 向量数据库
+        type: primary
+      - document: RAG
+        type: secondary
+    relations:
+      - target: Embedding
+        type: depends
+      - target: HNSW
+        type: depends
+
+  - name: zvec
+    type: tool
+    description: zvec 向量数据库引擎，支持 HNSW/IVF/FLAT
+    parent: Vector Database
+    bindings:
+      - document: 向量数据库
+        type: secondary
+
+  - name: SurrealDB
+    type: infrastructure
+    description: 多模型数据库，同时支持文档、图、全文检索
+
+  # === 概念层 ===
+  - name: Embedding
+    type: concept
+    description: 文本嵌入，将文本映射为稠密向量
+    bindings:
+      - document: Embedding
+        type: primary
+      - document: RAG
+        type: secondary
+
+  - name: Hallucination
+    type: problem
+    description: 幻觉问题，LLM 生成不存在的信息
+    bindings:
+      - document: RAG
+        type: secondary
+    relations:
+      - target: RAG Pipeline
+        type: triggers
+
+  - name: Agent
+    type: pattern
+    description: LLM 驱动自主智能体，工具调用+多步推理
+    bindings:
+      - document: Agent
+        type: primary
+    relations:
+      - target: RAG Pipeline
+        type: contrasts
+
+  - name: ReAct
+    type: pattern
+    description: Reason+Act 循环，Agent 的核心控制模式
+    parent: Agent
+
+  - name: Tool Calling
+    type: mechanism
+    description: LLM 工具调用机制
+    parent: Agent
+    relations:
+      - target: ReAct
+        type: depends
+
+  - name: Prompt
+    type: concept
+    description: 提示词，引导 LLM 输出的输入文本
+    bindings:
+      - document: Prompt
+        type: primary
+    relations:
+      - target: Agent
+        type: related
+
+  - name: System Prompt
+    type: concept
+    description: 系统提示词，定义模型角色和行为约束
+    parent: Prompt
+
+  - name: Few-shot
+    type: pattern
+    description: 少样本提示，用少量示例引导格式
+    parent: Prompt
+
+  - name: Chain-of-Thought
+    type: pattern
+    description: 思维链提示，要求逐步推理
+    parent: Prompt
+    relations:
+      - target: Few-shot
+        type: contrasts
+
+  # === 参数层 ===
+  - name: M
+    type: configuration
+    description: HNSW 图度数参数，影响精度和内存
+    parent: HNSW
+
+  - name: ef_construction
+    type: configuration
+    description: HNSW 建图搜索宽度参数，影响索引质量
+    parent: HNSW

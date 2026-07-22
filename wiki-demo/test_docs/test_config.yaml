@@ -1,0 +1,35 @@
+# 服务配置
+name: "wiki-runtime"
+version: "1.0.0"
+description: "Semantic Wiki Runtime"
+
+server:
+  host: "0.0.0.0"
+  port: 8090
+  workers: 4
+
+database:
+  surrealdb:
+    endpoint: "file://wiki_data.db"
+    namespace: "wiki"
+    database: "wiki"
+
+  zvec:
+    endpoint: "http://localhost:8666"
+    collection: "wiki_chunks"
+
+embedding:
+  model: "qwen3-embedding:0.6b"
+  dimension: 1024
+  provider: "ollama"
+  endpoint: "http://localhost:11434"
+
+llm:
+  model: "hy3"
+  endpoint: "http://127.0.0.1:8000"
+  api_type: "openai"
+  timeout: 120
+
+chunking:
+  max_chars: 2000
+  strategy: "semantic"

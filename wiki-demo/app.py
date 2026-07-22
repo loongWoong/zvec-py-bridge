@@ -36,6 +36,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config  # noqa: E402
 import db  # noqa: E402
 import llm  # noqa: E402
+import ontology  # noqa: E402
+import ontology_builder  # noqa: E402
+import pipeline  # noqa: E402
 import seed  # noqa: E402
 import wiki_runtime as wr  # noqa: E402
 import zvec_client  # noqa: E402
@@ -132,6 +135,16 @@ def startup():
                 print("  ⚠ zvec/Ollama 不可达，跳过向量入库（图/全文/元数据检索仍可用）")
     except Exception as e:
         print(f"  ⚠ 种子数据灌入异常: {e}")
+
+    # 5. 灌入种子本体（ontology/concepts.yaml）—— 与文档种子独立，幂等
+    try:
+        onto_result = seed.seed_ontology()
+        if onto_result.get("skipped"):
+            if _state.get("started"):
+                pass
+        # 成功/跳过信息已在 seed_ontology 内打印
+    except Exception as e:
+        print(f"  ⚠ 本体种子灌入异常: {e}")
 
     _state["started"] = True
     print("=" * 60)
@@ -581,7 +594,14 @@ def compile_doc(req: CompileRequest):
             entities=compiled.get("entities"),
             relations=compiled.get("suggested_relations"),
         )
-        return {"compiled": compiled, "document": doc}
+        # 自动同步向量
+        vec_result = None
+        if _state["zvec"] and _state["ollama"] and doc:
+            try:
+                vec_result = pipeline.sync_vectors_for_document(doc["id"])
+            except Exception as e:
+                vec_result = {"status": "warning", "reason": str(e)}
+        return {"compiled": compiled, "document": doc, "vector_sync": vec_result}
     except llm.LLMError as e:
         raise HTTPException(502, str(e))
 
@@ -631,6 +651,12 @@ async def compile_batch(
                 "title": doc.get("title", ""),
                 "doc_id": doc.get("id", ""),
             })
+            # 后台异步同步向量
+            if _state["zvec"] and _state["ollama"] and doc:
+                try:
+                    pipeline.sync_vectors_for_document(doc["id"])
+                except Exception:
+                    pass
         except llm.LLMError as e:
             results.append({"file": filename, "status": "error", "reason": str(e)})
         except Exception as e:
@@ -669,6 +695,217 @@ def extract(req: ExtractRequest):
             to_key = wr._safe_key(rel["to"].lower())
             wr.relate(f"entity:{from_key}", "entity_related", f"entity:{to_key}")
         return {"extracted": result, "doc_id": rid}
+    except llm.LLMError as e:
+        raise HTTPException(502, str(e))
+
+
+# ====================================================================== #
+#  入库管道（Phase 1：文件/目录导入 + 向量同步）
+# ====================================================================== #
+class IngestFileRequest(BaseModel):
+    file_path: str
+    topic: str | None = None
+    author: str | None = None
+    skip_existing: bool = True
+    skip_zvec: bool = False
+
+
+class IngestDirectoryRequest(BaseModel):
+    dir_path: str
+    topic: str | None = None
+    author: str | None = None
+    recursive: bool = True
+    skip_existing: bool = True
+    skip_zvec: bool = False
+    max_files: int = 500
+
+
+@app.post("/api/pipeline/ingest-file")
+def api_ingest_file(req: IngestFileRequest):
+    """导入单个文件到知识库（自动切分 + 写 SurrealDB + 写 zvec）。"""
+    return pipeline.ingest_file(
+        req.file_path, topic=req.topic, author=req.author,
+        skip_existing=req.skip_existing, skip_zvec=req.skip_zvec,
+    )
+
+
+@app.post("/api/pipeline/ingest-directory")
+def api_ingest_directory(req: IngestDirectoryRequest):
+    """批量导入目录到知识库。"""
+    return pipeline.ingest_directory(
+        req.dir_path, topic=req.topic, author=req.author,
+        recursive=req.recursive, skip_existing=req.skip_existing,
+        skip_zvec=req.skip_zvec, max_files=req.max_files,
+    )
+
+
+@app.post("/api/documents/{doc_id}/sync-vectors")
+def api_sync_vectors(doc_id: str):
+    """为已有文档重建向量索引（删除旧向量 + 重新切分 + 入库）。"""
+    if not _state["zvec"] or not _state["ollama"]:
+        raise HTTPException(503, "zvec/Ollama 不可达，无法同步向量")
+    result = pipeline.sync_vectors_for_document(doc_id)
+    if result.get("status") == "error":
+        raise HTTPException(500, result.get("reason", "同步失败"))
+    return result
+
+
+# ====================================================================== #
+#  本体层（Phase 2：概念层级 + 关系 + 文档绑定）
+#  对应 AI推理引擎.md Step 2 本体构建 / Step 5 概念定位 / Step 6 本体展开
+# ====================================================================== #
+class CreateConceptRequest(BaseModel):
+    name: str
+    concept_type: str = "concept"
+    description: str = ""
+    parent_id: str | None = None
+    key: str | None = None
+
+
+class AddRelationRequest(BaseModel):
+    source_id: str
+    target_id: str
+    relation_type: str = "related"
+
+
+class BindConceptRequest(BaseModel):
+    concept_id: str
+    document_id: str
+    binding_type: str = "primary"
+    file_path: str = ""
+    function_name: str = ""
+
+
+class ImportOntologyRequest(BaseModel):
+    file_path: str | None = None
+    yaml_content: str | None = None
+    clear_existing: bool = False
+
+
+class BuildOntologyRequest(BaseModel):
+    domain_hint: str = ""
+    output_yaml: str | None = None
+
+
+@app.get("/api/ontology/stats")
+def ontology_stats():
+    """本体统计：概念数 / 关系数 / 绑定数。"""
+    return ontology.stats()
+
+
+@app.get("/api/ontology/concepts")
+def ontology_list_concepts(concept_type: str | None = None):
+    """列出所有概念（可按类型过滤）。"""
+    return {"concepts": ontology.list_concepts(concept_type)}
+
+
+@app.get("/api/ontology/graph")
+def ontology_graph():
+    """完整本体图（概念节点 + is-a 层级边 + 关系边），供前端 D3 渲染。"""
+    return ontology.get_full_graph()
+
+
+@app.get("/api/ontology/concepts/{concept_id}")
+def ontology_get_concept(concept_id: str):
+    """获取概念详情（含子概念、父概念、关系、绑定文档）。"""
+    concept = ontology.get_concept(concept_id)
+    if not concept:
+        raise HTTPException(404, f"概念 {concept_id} 不存在")
+    return concept
+
+
+@app.get("/api/ontology/concepts/{concept_id}/expand")
+def ontology_expand(concept_id: str, depth: int = 2):
+    """以概念为中心展开本体子图（N 跳），对应 Step 6 本体展开。"""
+    result = ontology.expand_concept(concept_id, depth)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+
+@app.post("/api/ontology/concepts")
+def ontology_create_concept(req: CreateConceptRequest):
+    """创建概念节点。"""
+    return ontology.create_concept(
+        name=req.name, concept_type=req.concept_type,
+        description=req.description, parent_id=req.parent_id, key=req.key,
+    )
+
+
+@app.post("/api/ontology/relations")
+def ontology_add_relation(req: AddRelationRequest):
+    """建立概念间关系边（depends/triggers/contains/contrasts/related/...）。"""
+    result = ontology.add_relation(req.source_id, req.target_id, req.relation_type)
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+@app.post("/api/ontology/bindings")
+def ontology_bind(req: BindConceptRequest):
+    """将概念绑定到文档（primary/secondary/inferred）。"""
+    result = ontology.bind_concept(
+        req.concept_id, req.document_id, req.binding_type,
+        req.file_path, req.function_name,
+    )
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+@app.delete("/api/ontology/concepts/{concept_id}")
+def ontology_delete(concept_id: str):
+    """删除概念及其关联边、绑定。"""
+    return ontology.delete_concept(concept_id)
+
+
+@app.get("/api/ontology/export")
+def ontology_export():
+    """导出全部本体为 YAML（Git 版本管理 / 人工编辑回流）。"""
+    yaml_str = ontology.export_to_yaml()
+    return PlainTextResponse(yaml_str, media_type="text/yaml; charset=utf-8")
+
+
+@app.post("/api/ontology/import")
+def ontology_import(req: ImportOntologyRequest):
+    """从 YAML 导入本体。
+
+    可传 file_path（服务器路径）或 yaml_content（直接内容）。
+    不传则加载内置种子 ontology/concepts.yaml。
+    """
+    import tempfile
+    if req.yaml_content:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(req.yaml_content)
+            tmp_path = f.name
+        try:
+            return ontology.import_from_yaml(tmp_path, clear_existing=req.clear_existing)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    file_path = req.file_path or os.path.join(DEMO_DIR, "ontology", "concepts.yaml")
+    if not os.path.exists(file_path):
+        raise HTTPException(404, f"YAML 文件不存在: {file_path}")
+    return ontology.import_from_yaml(file_path, clear_existing=req.clear_existing)
+
+
+@app.post("/api/ontology/build")
+def ontology_build(req: BuildOntologyRequest):
+    """LLM 辅助本体构建：扫描文档 → 提议概念/关系/绑定 → 输出 YAML。
+
+    对应 AI推理引擎.md Step 2「LLM 辅助抽取 + 人工校验」。
+    """
+    if not _state["llm"]:
+        raise HTTPException(503, "LLM 服务不可达，无法构建本体")
+    try:
+        return ontology_builder.propose_all(
+            domain_hint=req.domain_hint,
+            output_yaml=req.output_yaml,
+        )
     except llm.LLMError as e:
         raise HTTPException(502, str(e))
 

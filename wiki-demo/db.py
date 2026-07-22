@@ -30,6 +30,7 @@ DEFINE FIELD status   ON document TYPE string DEFAULT 'active';
 DEFINE FIELD version  ON document TYPE int DEFAULT 1;
 DEFINE FIELD created  ON document TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated  ON document TYPE datetime DEFAULT time::now();
+DEFINE FIELD concept_ids ON document TYPE option<array>;
 
 DEFINE TABLE raw SCHEMALESS;
 DEFINE FIELD url       ON raw TYPE option<string>;
@@ -109,6 +110,24 @@ DEFINE TABLE updated_by TYPE RELATION FROM document TO raw SCHEMALESS;
 
 -- design §8 LLM Memory Graph：conversation → document（对话关于哪个文档）
 DEFINE TABLE about TYPE RELATION FROM conversation TO document SCHEMALESS;
+
+-- ─────────── 本体层（Phase 2） ───────────
+-- concept 节点：本体中的概念（机制、组件、流程、问题、配置等）
+DEFINE TABLE concept SCHEMALESS;
+DEFINE FIELD name        ON concept TYPE string;
+DEFINE FIELD description ON concept TYPE option<string>;
+DEFINE FIELD type        ON concept TYPE option<string>;  -- mechanism|component|process|problem|configuration
+DEFINE FIELD parent_id   ON concept TYPE option<string>;  -- 概念层级 is-a 关系
+
+-- concept → concept 关系边（depends / triggers / contains / contrasts）
+DEFINE TABLE concept_related TYPE RELATION FROM concept TO concept SCHEMALESS;
+DEFINE FIELD relation_type ON concept_related TYPE option<string>;
+
+-- concept → document 绑定边（概念出现在哪些文档中）
+DEFINE TABLE concept_binding TYPE RELATION FROM concept TO document SCHEMALESS;
+DEFINE FIELD binding_type ON concept_binding TYPE option<string>;  -- primary|secondary|inferred
+DEFINE FIELD file_path   ON concept_binding TYPE option<string>;
+DEFINE FIELD function_name ON concept_binding TYPE option<string>;
 
 -- ─────────── 全文检索索引（design §9） ───────────
 DEFINE ANALYZER IF NOT EXISTS simple_bm25 TOKENIZERS blank, class FILTERS lowercase;

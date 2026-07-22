@@ -14,6 +14,18 @@ import requests
 import config
 import wiki_runtime as wr
 
+# 可选导入：本体相关模块（需 surrealdb）。缺失时 use_ontology/use_rerank 自动降级。
+try:
+    import concept_locator
+    import ontology_traversal
+    import reranker
+    _ONTOLOGY_DEPS = True
+except ImportError:
+    concept_locator = None     # type: ignore
+    ontology_traversal = None  # type: ignore
+    reranker = None            # type: ignore
+    _ONTOLOGY_DEPS = False
+
 # ====================================================================== #
 #  底层 LLM 调用（复用 demo/agent.py 模式）
 # ====================================================================== #
@@ -474,31 +486,52 @@ TOOL_FUNCTIONS = {
 AGENT_SYSTEM_PROMPT = """\
 你是一个 Semantic Wiki 问答 Agent。你通过调用工具检索知识图谱中的信息来回答问题。
 
-## 工作模式
-你不是直接从自身知识回答，而是通过调用工具检索证据，再基于检索结果整合答案。
-工作流程：分析问题 → 选择合适工具 → 查看结果 → 决定是否继续检索或直接回答 → 生成带引用的回答。
+## 工作流程（闭环检索）
+1. 收到问题 → 分析需要什么信息
+2. 调用工具检索 → 观察结果
+3. 自评：检索结果是否足够回答问题？
+   - 够了 → 生成带引用的最终回答
+   - 不够 → 明确缺什么信息 → 补充检索 → 再次自评
+   - 最多补充检索 2 次（总共 3 轮检索）
+
+## 自评标准
+检索结果足够，当：
+- 找到了问题的核心概念定义和解释
+- 找到了相关的因果关系或排查步骤
+- 没有明显的矛盾信息
+
+需要继续检索，当：
+- 关键概念未被覆盖
+- 结果中存在矛盾需要验证
+- 排查类问题缺少某个关键环节
 
 ## 可用工具
 1. search_documents — 四路融合检索（向量+全文+图+元数据），返回 doc_id/title/score/sources/excerpt
 2. get_document — 读取单篇文档全文及关系邻接
 3. list_documents — 列出所有文档元数据
-4. graph_neighbors — 图邻接遍历（查询文档上下游关系、实体被哪些文档提及）
-5. related_articles — 获取与某文档相关的文章
-6. entity_lookup — 按名称查找实体，返回被哪些文档提及
+4. graph_neighbors — 图邻接遍历
+5. related_articles — 获取文档相关文章
+6. entity_lookup — 按名称查找实体
 7. topic_tree — 列出所有主题
 8. tag_tree — 列出所有标签层级
-9. merge_document — 合并两篇重复文档为一篇新文档（建 supersedes 边，源文档标记 archived）
-10. update_metadata — 更新文档元数据（标签/实体/主题/作者）并重建图边
-11. build_graph — 对文档抽取实体和关系并建立图边
-12. hot_documents — 返回被用户问得最多的文档排行
+9. merge_document — 合并重复文档
+10. update_metadata — 更新文档元数据
+11. build_graph — 对文档抽取实体关系建图边
+12. hot_documents — 热门文档排行
+
+## 检索策略
+- 第 1 轮：用 search_documents 广撒网，查看最高分结果的标题和摘要
+- 若第 1 轮信息不够 → 针对缺失信息用更精确的关键词再搜
+- 第 2 轮后仍不够 → 用 get_document 精读最相关的文档全文
+- 简单定义类问题（"什么是 X"）通常 1 轮就够了
 
 ## 引用要求（必须遵守）
 - 回答中必须标注来源：[doc_id] title
 - 不能编造文档中不存在的信息
-- 如果工具返回的结果不足以完整回答问题，应明确说明信息不足
+- 如果工具返回的结果不足以完整回答问题，明确说明信息不足，并给出已有信息中能得到的部分结论
 
 ## 错误守门
-- 如果工具返回 error 字段，必须在回答中如实说明失败原因
+- 如果工具返回 error 字段，如实说明失败原因
 - 不能把工具调用失败描述为成功
 
 ## 知识库
@@ -506,19 +539,121 @@ AGENT_SYSTEM_PROMPT = """\
 """
 
 
-def run_agent(question: str, max_iterations: int = 6) -> dict:
-    """运行 Wiki Agent：LLM 选择工具 → runtime 执行 → LLM 整合结果。
+def run_agent(question: str, max_iterations: int = 8,
+              use_ontology: bool = True,
+              use_rerank: bool = True) -> dict:
+    """运行闭环 Wiki Agent。
 
-    返回 {"answer": str, "trace": [...], "iterations": int, "elapsed": float}
+    流程（P3 快速通道 + P1-3 检索计划 + P2-1 硬约束 + P2-2 增强答案）：
+      0. classify_query → fast/slow path
+      1. 概念定位 + 本体展开 → 检索计划
+      2. Tool-calling 循环（代码级闭环控制）
+      3. Re-Rank 精选
+      4. 答案附加 ontology_path + confidence
+
+    返回 {"answer": str, "trace": [...], "iterations": int, "elapsed": float,
+           "concept_location": dict | None, "ontology_path": list | None,
+           "confidence": float | None, "path_type": "fast" | "deep"}
     """
     messages = [
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},
-        {"role": "user", "content": question},
     ]
+
+    # ── Step 0: 复杂度判定（P3 快速通道）──
+    path_type = "deep"
+    is_simple = False
+    if concept_locator:
+        try:
+            classification = concept_locator.classify_query(question)
+            is_simple = classification.get("complexity") == "simple"
+            path_type = "fast" if is_simple else "deep"
+        except Exception:
+            pass
+
+    # ── Step 1: 概念定位 + 检索计划（P1-3）──
+    concept_info: dict | None = None
+    search_plan: dict | None = None
+    concept_names: list[str] = []
+    if use_ontology and concept_locator:
+        try:
+            concept_info = concept_locator.locate(question)
+            located = concept_info.get("located_concepts", [])
+            implicit = concept_info.get("implicit_concepts", [])
+            concept_names = [c["name"] for c in located if c.get("confidence", 0) > 0.5]
+            concept_names += [c["name"] for c in implicit if c.get("confidence", 0) > 0.4]
+
+            if concept_names and ontology_traversal:
+                # 生成检索计划
+                try:
+                    search_plan = ontology_traversal.generate_search_plan(concept_names, depth=2)
+                except Exception:
+                    search_plan = None
+
+                # 概念提示注入
+                concept_hint = []
+                if located:
+                    names = [c["name"] for c in located if c.get("confidence", 0) > 0.5]
+                    if names:
+                        concept_hint.append(f"相关概念: {', '.join(names)}")
+                if implicit:
+                    names = [c["name"] for c in implicit if c.get("confidence", 0) > 0.4]
+                    if names:
+                        concept_hint.append(f"可能相关的概念: {', '.join(names)}")
+                if search_plan:
+                    scope = search_plan.get("stats", {})
+                    concept_hint.append(
+                        f"检索范围: {scope.get('bound_documents', 0)} 文档, "
+                        f"{scope.get('bound_files', 0)} 文件"
+                    )
+                if concept_hint:
+                    question = f"{question}\n\n[系统提示] {'; '.join(concept_hint)}"
+        except Exception:
+            concept_info = None
+
+    # 简单问题走快速通道：限制 max_iterations 为 3
+    if is_simple:
+        max_iterations = min(max_iterations, 4)
+
+    messages.append({"role": "user", "content": question})
+
     trace: list[dict] = []
     start_time = time.time()
+    all_retrieved_docs: list[dict] = []
+    search_rounds = 0
+    last_new_docs = 0
+    prev_retrieved_ids: set[str] = set()
+
+    # P2-1: 硬性约束
+    TIME_LIMIT = 45     # 总时间上限 (秒)
+    TOKEN_LIMIT = 40000 # 总 token 预算上限 (估算: 1字≈0.3 token)
+
+    def _est_tokens(text: str) -> int:
+        """粗略 token 估算：中文字≈1 token/字，英文≈0.25 token/字"""
+        cn = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+        en = len(text) - cn
+        return cn + int(en * 0.25)
+
+    def _total_tokens(msgs: list[dict]) -> int:
+        return sum(_est_tokens(m.get("content", "") or "") for m in msgs)
 
     for i in range(max_iterations):
+        # P2-1: 时间超时检查
+        elapsed = time.time() - start_time
+        if elapsed > TIME_LIMIT:
+            messages.append({
+                "role": "user",
+                "content": f"[系统] 已超时({TIME_LIMIT}秒)。请基于已有信息直接给出最佳回答。",
+            })
+            # 让 LLM 最后一轮直接回答
+            max_iterations = i + 2
+
+        # P2-1: token 预算检查
+        if _total_tokens(messages) > TOKEN_LIMIT:
+            messages.append({
+                "role": "user",
+                "content": "[系统] 已达 token 预算上限。请基于已有信息直接给出最佳回答。",
+            })
+            max_iterations = i + 2
         url, body, headers = _build_llm_request(_to_provider_messages(messages), TOOL_DEFS)
         r = requests.post(url, json=body, headers=headers, timeout=config.LLM_TIMEOUT)
 
@@ -530,12 +665,37 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
         content, tool_calls = _parse_llm_response(r.json())
 
         if tool_calls:
+            # P2-1: 追踪检索轮次
+            is_search_call = any(tc["name"] == "search_documents" for tc in tool_calls)
+            if is_search_call:
+                search_rounds += 1
+                # P2-1: 超过 3 轮检索，强制注入终止提示
+                if search_rounds > 3:
+                    messages.append({
+                        "role": "user",
+                        "content": "[系统] 已达到最大检索轮次(3轮)。请基于已有信息直接给出最佳回答，明确标注不确定的部分。",
+                    })
+                    continue
+
+                # P2-1: 每轮检索范围收窄提示
+                if search_rounds == 2:
+                    messages.append({
+                        "role": "user",
+                        "content": "[系统] 第2轮检索：请针对第1轮缺失的关键信息做精确补充检索，不要重复之前的查询。",
+                    })
+                elif search_rounds == 3:
+                    messages.append({
+                        "role": "user",
+                        "content": "[系统] 第3轮检索（最后一轮）：仅验证矛盾点或补充最关键的缺失环节。",
+                    })
+
             messages.append({
                 "role": "assistant",
                 "content": content,
                 "tool_calls": tool_calls,
             })
 
+            new_docs_this_round = 0
             for tc in tool_calls:
                 tool_name = tc["name"]
                 tool_args = tc["arguments"]
@@ -551,6 +711,16 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
                     result = {"error": f"未知工具: {tool_name}"}
                 duration = round(time.time() - t0, 3)
 
+                # 收集 search_documents 结果
+                if tool_name == "search_documents" and isinstance(result, dict):
+                    docs = result.get("results", [])
+                    for d in docs:
+                        did = d.get("doc_id", "")
+                        if did and did not in prev_retrieved_ids:
+                            new_docs_this_round += 1
+                            prev_retrieved_ids.add(did)
+                    all_retrieved_docs.extend(docs)
+
                 trace.append({
                     "iteration": i + 1,
                     "tool": tool_name,
@@ -565,31 +735,91 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
                     "name": tool_name,
                     "content": _json_safe_dumps(result),
                 })
+
+            # P2-1: 连续两轮无新增有效信息 → 强制终止
+            if is_search_call and search_rounds >= 2 and new_docs_this_round == 0 and last_new_docs == 0:
+                messages.append({
+                    "role": "user",
+                    "content": "[系统] 最近两轮检索均无新增信息。请直接基于已有证据给出回答。",
+                })
+            # P2-1: 每轮检索后告知 Agent 已检索的文档，防止重复查询
+            if is_search_call and prev_retrieved_ids:
+                retrieved_titles = [d.get("title", d.get("doc_id", ""))
+                                   for d in all_retrieved_docs[-5:]]
+                messages.append({
+                    "role": "user",
+                    "content": f"[系统] 已检索文档({len(prev_retrieved_ids)}篇，最新5篇): "
+                               f"{'; '.join(retrieved_titles)}。补充检索时避免重复查询已覆盖的内容。",
+                })
+            last_new_docs = new_docs_this_round
         else:
             answer = _clean_answer(content)
-            # 记录对话到 Memory Graph（design §8）：从 trace 中提取引用的 doc_id
+
+            # ── Re-Rank 后处理 ──
+            if use_rerank and reranker and all_retrieved_docs:
+                try:
+                    reranked = reranker.rerank(all_retrieved_docs, question,
+                                               target_concept_ids=concept_names, topk=5)
+                    trace.append({
+                        "iteration": i + 1,
+                        "tool": "_rerank",
+                        "args": {"candidates": len(all_retrieved_docs)},
+                        "result": {"top_docs": [(r["title"], r.get("final_score", r.get("score", 0))) for r in reranked[:5]]},
+                        "duration": 0,
+                    })
+                except Exception:
+                    pass
+
+            # P2-2: 构建 ontology_path 和 confidence
+            ontology_path = None
+            confidence = None
+            if concept_info and concept_info.get("located_concepts"):
+                ontology_path = [
+                    {
+                        "step": "概念定位",
+                        "concepts": [c["name"] for c in concept_info.get("located_concepts", [])],
+                    }
+                ]
+                if search_plan:
+                    ontology_path.append({
+                        "step": "检索计划",
+                        "strategies": [s["strategy"] for s in search_plan.get("plan", [])],
+                    })
+                ontology_path.append({
+                    "step": "检索执行",
+                    "rounds": search_rounds,
+                    "docs_retrieved": len(all_retrieved_docs),
+                })
+                # 简单置信度：概念匹配数 / 结果覆盖
+                if concept_info.get("located_concepts"):
+                    confidence = min(0.9, 0.5 + 0.1 * len(concept_info["located_concepts"]))
+
+            # 记录对话到 Memory Graph
             doc_ids: list[str] = []
             for t in trace:
                 result = t.get("result", {})
                 if isinstance(result, dict):
-                    # search_documents 返回 results 列表
                     for r in (result.get("results") or []):
                         did = r.get("doc_id", "")
                         if did and did not in doc_ids:
                             doc_ids.append(did)
-                    # get_document 返回单个 doc
                     did = result.get("id", "") or result.get("doc_id", "")
                     if did and did not in doc_ids:
                         doc_ids.append(did)
             try:
                 wr.record_conversation(question, answer, doc_ids)
             except Exception:
-                pass  # 记录失败不影响主流程
+                pass
+
             return {
                 "answer": answer,
                 "trace": trace,
                 "iterations": i + 1,
                 "elapsed": round(time.time() - start_time, 2),
+                "concept_location": concept_info,
+                "ontology_path": ontology_path,
+                "confidence": confidence,
+                "path_type": path_type,
             }
 
     return {
@@ -597,4 +827,8 @@ def run_agent(question: str, max_iterations: int = 6) -> dict:
         "trace": trace,
         "iterations": max_iterations,
         "elapsed": round(time.time() - start_time, 2),
+        "concept_location": concept_info,
+        "ontology_path": None,
+        "confidence": None,
+        "path_type": path_type,
     }

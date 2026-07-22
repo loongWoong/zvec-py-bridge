@@ -12,6 +12,13 @@ import config
 import wiki_runtime as wr
 import zvec_client
 
+# 可选：概念标注
+try:
+    import ontology
+    _ONTOLOGY_SEED = True
+except ImportError:
+    _ONTOLOGY_SEED = False
+
 # ====================================================================== #
 #  Topic 定义
 # ====================================================================== #
@@ -448,6 +455,37 @@ def _chunk_document(doc: dict) -> list[dict]:
     return chunks
 
 
+def seed_ontology() -> dict:
+    """灌入种子本体（ontology/concepts.yaml），幂等。
+
+    与文档种子独立：即使文档已存在（seed_all_sync 跳过），
+    只要 concept 表为空就加载，确保本体层可用。
+    对应 AI推理引擎.md Step 2 本体构建的种子冷启动。
+    """
+    if not _ONTOLOGY_SEED:
+        return {"skipped": True, "reason": "ontology 模块未启用"}
+    try:
+        st = ontology.stats()
+        if st.get("concepts", 0) > 0:
+            return {"skipped": True, "reason": "本体已存在", "concepts": st["concepts"]}
+    except Exception as e:
+        return {"skipped": True, "reason": f"stats 查询失败: {e}"}
+
+    import os
+    yaml_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "ontology", "concepts.yaml"
+    )
+    if not os.path.exists(yaml_path):
+        return {"skipped": True, "reason": "concepts.yaml 不存在"}
+    try:
+        result = ontology.import_from_yaml(yaml_path)
+        print(f"  ✓ 本体种子已灌入: {result.get('imported', 0)} 新增 / "
+              f"{result.get('updated', 0)} 更新")
+        return result
+    except Exception as e:
+        return {"skipped": True, "reason": f"导入失败: {e}"}
+
+
 def seed_all_sync() -> dict:
     """灌入图/文档/实体/标签种子数据（SurrealDB，快速同步完成）。
 
@@ -467,7 +505,7 @@ def seed_all_sync() -> dict:
     for key, name, parent in TAG_TREE:
         wr.ensure_tag(key, name, parent)
 
-    # 3. 灌入文档 + 关系 + 实体
+    # 3. 灌入文档 + 关系 + 实体 + 概念标注（P1-1）
     all_chunks: list[dict] = []
     for doc in DOCUMENTS:
         wr.create_document(
@@ -480,6 +518,22 @@ def seed_all_sync() -> dict:
             entities=doc["entities"],
             relations=doc["relations"],
         )
+        # 概念标注：用 entity 列表作为初始 concept_ids
+        if _ONTOLOGY_SEED:
+            try:
+                entity_names = [e["name"] for e in doc.get("entities", [])]
+                concept_ids = []
+                for ename in entity_names:
+                    cid = ontology._concept_rid(ename)
+                    concept_ids.append(cid)
+                if concept_ids:
+                    from db import get_db
+                    get_db().query(
+                        f"UPDATE document:{doc['key']} SET concept_ids = $ids",
+                        {"ids": concept_ids},
+                    )
+            except Exception:
+                pass
         all_chunks.extend(_chunk_document(doc))
 
     # 4. 灌入 raw 源 + 建立 references/updated_by 边（design §1/§7）

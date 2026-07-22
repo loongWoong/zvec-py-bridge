@@ -198,6 +198,48 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .graph-link { transition: opacity 0.15s var(--ease); }
 .graph-link.dimmed { opacity: 0.05; }
 .graph-link.highlight { opacity: 1; stroke-width: 2.5; }
+/* ── Ontology view ── */
+.onto-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+.onto-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.onto-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+.onto-chip { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
+.onto-chip b { color: var(--text); font-weight: 600; }
+.onto-filters { display: flex; gap: 6px; align-items: center; }
+.onto-filters select { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 11px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
+.onto-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.onto-btn { padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
+.onto-btn:hover { color: var(--text); border-color: var(--text-secondary); }
+.onto-btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+.onto-main { display: grid; grid-template-columns: 240px 1fr 280px; gap: 14px; min-height: 560px; }
+@media (max-width: 1100px) { .onto-main { grid-template-columns: 1fr; } }
+.onto-sidebar { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; }
+.onto-sidebar input { padding: 8px 10px; border: none; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-sans); background: var(--surface); outline: none; }
+.onto-list { overflow-y: auto; max-height: 520px; }
+.onto-list .onto-group-head { padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); background: var(--surface-sunken); position: sticky; top: 0; }
+.onto-list .onto-item { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; transition: background 0.15s var(--ease); }
+.onto-list .onto-item:hover { background: var(--surface-sunken); }
+.onto-list .onto-item.active { background: var(--surface-sunken); font-weight: 600; }
+.onto-list .onto-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.onto-list .onto-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.onto-list .onto-item .ct { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.onto-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); position: relative; overflow: hidden; }
+#onto-svg { width: 100%; height: 560px; cursor: grab; display: block; }
+#onto-svg:active { cursor: grabbing; }
+.onto-legend { position: absolute; bottom: 8px; left: 8px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; color: var(--text-secondary); background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 6px; }
+.onto-legend .legend-item { display: flex; align-items: center; gap: 3px; }
+.onto-legend .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.onto-legend .legend-line { width: 14px; height: 2px; border-radius: 1px; }
+.onto-detail { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; overflow-y: auto; max-height: 560px; font-size: 13px; }
+.onto-detail h4 { font-family: var(--font-serif); font-size: 17px; font-weight: 500; margin-bottom: 4px; }
+.onto-detail .onto-type-badge { display: inline-block; font-size: 10px; font-family: var(--font-mono); padding: 2px 7px; border-radius: 4px; margin-bottom: 10px; }
+.onto-detail .onto-desc { color: var(--text-secondary); font-size: 12px; line-height: 1.55; margin-bottom: 14px; }
+.onto-detail h5 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin: 14px 0 6px; font-weight: 600; }
+.onto-detail .onto-rel { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.onto-detail .onto-rel:hover { color: var(--text); }
+.onto-detail .onto-rel .rt { font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary); background: var(--surface-sunken); padding: 1px 6px; border-radius: 3px; }
+.onto-detail .onto-bind { padding: 4px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
+.onto-detail .onto-bind .bt { font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary); }
+.onto-detail .empty { color: var(--text-tertiary); font-size: 12px; text-align: center; padding: 40px 0; }
 .graph-label { font-size: 10px; font-family: var(--font-sans); fill: var(--text-secondary); pointer-events: none; font-weight: 500; }
 .graph-edge-label { font-size: 8px; font-family: var(--font-mono); fill: var(--text-tertiary); pointer-events: none; }
 /* ── Graph query panel ── */
@@ -351,6 +393,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     <button class="tab active" data-tab="library">文档库</button>
     <button class="tab" data-tab="graph">知识图谱</button>
     <button class="tab" data-tab="metadata">元数据</button>
+    <button class="tab" data-tab="ontology">本体</button>
     <button class="tab" data-tab="ask">问答</button>
   </div>
 
@@ -633,6 +676,36 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
       </div>
     </div>
   </div>
+
+  <!-- ── Ontology view ── -->
+  <div class="view" id="view-ontology">
+    <div class="onto-container">
+      <div class="onto-toolbar">
+        <div class="onto-stats" id="onto-stats"><span class="onto-chip">加载中…</span></div>
+        <div class="onto-filters">
+          <select id="onto-type-filter" title="概念类型"><option value="">全部类型</option></select>
+          <select id="onto-edge-filter" title="边类型"><option value="">全部关系</option></select>
+        </div>
+        <div class="onto-actions">
+          <button class="onto-btn" onclick="ontoExport()">导出 YAML</button>
+          <button class="onto-btn" onclick="ontoImport()">导入 YAML</button>
+          <button class="onto-btn" onclick="ontoBuild()">LLM 构建</button>
+          <button class="onto-btn primary" onclick="loadOntology()">刷新</button>
+        </div>
+      </div>
+      <div class="onto-main">
+        <div class="onto-sidebar">
+          <input type="text" id="onto-search" placeholder="搜索概念…" oninput="renderOntoList()">
+          <div id="onto-concept-list" class="onto-list"></div>
+        </div>
+        <div class="onto-canvas">
+          <svg id="onto-svg"></svg>
+          <div class="onto-legend" id="onto-legend"></div>
+        </div>
+        <div class="onto-detail" id="onto-detail"><div class="empty">点击概念节点查看详情</div></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -648,10 +721,11 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.tab).classList.add('active');
     // search bar only for library + graph
-    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata') ? 'none' : 'flex';
+    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata' || t.dataset.tab === 'ontology') ? 'none' : 'flex';
     if (t.dataset.tab === 'graph') renderGraph();
     if (t.dataset.tab === 'metadata') loadMetadata();
     if (t.dataset.tab === 'ask') loadHotDocs();
+    if (t.dataset.tab === 'ontology') loadOntology();
   });
 });
 
@@ -2266,6 +2340,300 @@ function renderMarkdown(md) {
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
     .replace(/^/, '<p>').replace(/$/, '</p>');
+}
+
+// ── Ontology module（本体可视化：概念图 + 概念详情）──
+// 自包含模块，独立于知识图谱视图，复用 D3 力导向 / zoom-pan 交互模式。
+const ONTO_TYPE_COLORS = {
+  mechanism: '#1F6C9F', component: '#6B3FA0', process: '#346538',
+  problem: '#9F2F2D', configuration: '#956400', concept: '#787774',
+  algorithm: '#0E7C7B', pattern: '#B5540A', metric: '#4A5D23',
+  infrastructure: '#5B4B8A', tool: '#8C6A5B',
+};
+const ONTO_EDGE_COLORS = {
+  is_a: '#A8A6A1', depends: '#1F6C9F', triggers: '#9F2F2D',
+  contains: '#346538', contrasts: '#B5540A', related: '#787774',
+  implements: '#6B3FA0', supersedes: '#956400',
+};
+let ontoData = { nodes: [], edges: [] };
+let ontoConcepts = [];
+let ontoSim = null, ontoZoom = null, ontoG = null;
+let ontoSelected = null;
+
+async function loadOntology() {
+  const statsEl = document.getElementById('onto-stats');
+  statsEl.innerHTML = '<span class="onto-chip">加载中…</span>';
+  try {
+    const [statsRes, graphRes, listRes] = await Promise.all([
+      fetch(API + '/api/ontology/stats'),
+      fetch(API + '/api/ontology/graph'),
+      fetch(API + '/api/ontology/concepts'),
+    ]);
+    const stats = await statsRes.json();
+    const graph = await graphRes.json();
+    const list = await listRes.json();
+    ontoData = { nodes: graph.nodes || [], edges: graph.edges || [] };
+    ontoConcepts = list.concepts || [];
+    // 度数
+    const deg = {};
+    ontoData.edges.forEach(e => { deg[e.source] = (deg[e.source]||0)+1; deg[e.target] = (deg[e.target]||0)+1; });
+    ontoData.nodes.forEach(n => { n.degree = deg[n.id] || 0; });
+    // 统计 chip
+    const typeCounts = {};
+    ontoConcepts.forEach(c => { typeCounts[c.type] = (typeCounts[c.type]||0)+1; });
+    statsEl.innerHTML =
+      `<span class="onto-chip">概念 <b>${stats.concepts}</b></span>` +
+      `<span class="onto-chip">关系 <b>${stats.relations}</b></span>` +
+      `<span class="onto-chip">绑定 <b>${stats.bindings}</b></span>` +
+      `<span class="onto-chip">类型 <b>${Object.keys(typeCounts).length}</b></span>`;
+    // 填充 filter
+    populateOntoFilters(typeCounts);
+    renderOntoList();
+    renderOntoLegend();
+    buildOntoGraph();
+  } catch (e) {
+    statsEl.innerHTML = '<span class="onto-chip">加载失败</span>';
+    document.getElementById('onto-concept-list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>';
+  }
+}
+
+function populateOntoFilters(typeCounts) {
+  const typeSel = document.getElementById('onto-type-filter');
+  const curType = typeSel.value;
+  typeSel.innerHTML = '<option value="">全部类型</option>' +
+    Object.keys(typeCounts).sort().map(t => `<option value="${esc(t)}">${esc(t)} (${typeCounts[t]})</option>`).join('');
+  typeSel.value = curType;
+  const edgeSel = document.getElementById('onto-edge-filter');
+  const curEdge = edgeSel.value;
+  const edgeTypes = [...new Set(ontoData.edges.map(e => e.type))].sort();
+  edgeSel.innerHTML = '<option value="">全部关系</option>' +
+    edgeTypes.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  edgeSel.value = curEdge;
+  if (!typeSel.onchange) typeSel.onchange = buildOntoGraph;
+  if (!edgeSel.onchange) edgeSel.onchange = buildOntoGraph;
+}
+
+function renderOntoList() {
+  const q = (document.getElementById('onto-search').value || '').toLowerCase();
+  const typeFilter = document.getElementById('onto-type-filter').value;
+  let items = ontoConcepts.filter(c =>
+    (!typeFilter || c.type === typeFilter) &&
+    (!q || c.name.toLowerCase().includes(q) || (c.id||'').toLowerCase().includes(q)));
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  // 按类型分组
+  const groups = {};
+  items.forEach(c => { (groups[c.type] = groups[c.type] || []).push(c); });
+  const typeOrder = Object.keys(groups).sort();
+  const html = typeOrder.map(type => {
+    const head = `<div class="onto-group-head">${esc(type)} · ${groups[type].length}</div>`;
+    const rows = groups[type].map(c => {
+      const color = ONTO_TYPE_COLORS[c.type] || '#787774';
+      const active = ontoSelected === c.id ? ' active' : '';
+      return `<div class="onto-item${active}" onclick="selectOntoConcept('${esc(c.id)}')">` +
+        `<div class="onto-dot" style="background:${color}"></div>` +
+        `<span class="nm">${esc(c.name)}</span>` +
+        `<span class="ct">${c.children_count||0}/${c.binding_count||0}</span></div>`;
+    }).join('');
+    return head + rows;
+  }).join('');
+  document.getElementById('onto-concept-list').innerHTML = html || '<div class="empty">无匹配概念</div>';
+}
+
+function renderOntoLegend() {
+  const types = [...new Set(ontoData.nodes.map(n => n.type))].sort();
+  const edgeTypes = [...new Set(ontoData.edges.map(e => e.type))].sort();
+  const typeItems = types.map(t =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${ONTO_TYPE_COLORS[t]||'#787774'}"></div>${esc(t)}</div>`).join('');
+  const edgeItems = edgeTypes.map(t =>
+    `<div class="legend-item"><div class="legend-line" style="background:${ONTO_EDGE_COLORS[t]||'#E2E0DC'}"></div>${esc(t)}</div>`).join('');
+  document.getElementById('onto-legend').innerHTML = typeItems + edgeItems;
+}
+
+function getOntoFiltered() {
+  const typeFilter = document.getElementById('onto-type-filter').value;
+  const edgeFilter = document.getElementById('onto-edge-filter').value;
+  const visNodes = ontoData.nodes.filter(n => !typeFilter || n.type === typeFilter);
+  const visIds = new Set(visNodes.map(n => n.id));
+  const visEdges = ontoData.edges
+    .filter(e => visIds.has(e.source) && visIds.has(e.target) && (!edgeFilter || e.type === edgeFilter))
+    .map(e => ({ source: e.source, target: e.target, type: e.type }));
+  return { nodes: visNodes.map(n => ({...n})), edges: visEdges };
+}
+
+function buildOntoGraph() {
+  if (!ontoData.nodes.length) return;
+  const { nodes, edges } = getOntoFiltered();
+  const svgEl = document.getElementById('onto-svg');
+  const W = svgEl.clientWidth || 800, H = 560;
+  d3.select('#onto-svg').selectAll('*').remove();
+  if (ontoSim) { ontoSim.stop(); ontoSim = null; }
+  if (!nodes.length) {
+    d3.select('#onto-svg').append('text').attr('x', '50%').attr('y', '50%')
+      .attr('text-anchor','middle').attr('fill','#A8A6A1').text('无匹配节点');
+    return;
+  }
+  const svg = d3.select('#onto-svg').attr('viewBox', `0 0 ${W} ${H}`);
+  ontoG = svg.append('g');
+  ontoZoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => ontoG.attr('transform', e.transform));
+  svg.call(ontoZoom);
+  // 箭头 marker
+  const defs = svg.append('defs');
+  [...new Set(edges.map(e => e.type))].forEach(et => {
+    defs.append('marker').attr('id', `o-arrow-${et}`).attr('viewBox', '0 -5 10 10')
+      .attr('refX', 14).attr('refY', 0).attr('markerWidth', 6).attr('markerHeight', 6)
+      .attr('orient', 'auto').append('path').attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', ONTO_EDGE_COLORS[et] || '#E2E0DC');
+  });
+  // is_a 用虚线，其余实线
+  const link = ontoG.append('g').attr('class', 'links').selectAll('line')
+    .data(edges).enter().append('line').attr('class', 'graph-link')
+    .attr('stroke', d => ONTO_EDGE_COLORS[d.type] || '#E2E0DC')
+    .attr('stroke-width', d => d.type === 'is_a' ? 1 : 1.5)
+    .attr('stroke-opacity', d => d.type === 'is_a' ? 0.3 : 0.5)
+    .attr('stroke-dasharray', d => d.type === 'is_a' ? '4 3' : null)
+    .attr('marker-end', d => `url(#o-arrow-${d.type})`);
+  const node = ontoG.append('g').attr('class', 'nodes').selectAll('g')
+    .data(nodes).enter().append('g').attr('class', 'graph-node')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active && ontoSim) ontoSim.alpha(1).alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active && ontoSim) ontoSim.alphaTarget(0); }));
+  node.append('circle')
+    .attr('r', d => Math.max(5, Math.min(13, 5 + d.degree * 0.9)))
+    .attr('fill', d => ONTO_TYPE_COLORS[d.type] || '#787774')
+    .attr('stroke', d => d.id === ontoSelected ? '#111' : '#fff')
+    .attr('stroke-width', d => d.id === ontoSelected ? 2.5 : 1.5)
+    .attr('fill-opacity', 0.85);
+  node.append('text').attr('class', 'graph-label')
+    .attr('dy', d => -(Math.max(5, Math.min(13, 5 + d.degree * 0.9)) + 4))
+    .attr('text-anchor', 'middle')
+    .text(d => d.label.length > 18 ? d.label.slice(0, 18) + '…' : d.label);
+  // Tooltip（复用 graph-tooltip）
+  const tooltip = document.getElementById('graph-tooltip');
+  node.on('mouseenter', (e, d) => {
+    if (tooltip) {
+      tooltip.innerHTML = `<div class="tt-label">${esc(d.label)}</div>` +
+        `<div class="tt-meta">类型: ${esc(d.type)} · 度: ${d.degree}</div>`;
+      tooltip.classList.add('show');
+    }
+  }).on('mousemove', e => { if (tooltip) { tooltip.style.left = (e.pageX+12)+'px'; tooltip.style.top = (e.pageY-10)+'px'; } })
+    .on('mouseleave', () => { if (tooltip) tooltip.classList.remove('show'); });
+  // Hover 高亮邻居
+  node.on('mouseover', (e, d) => {
+    const nb = new Set([d.id]);
+    edges.forEach(le => {
+      if (le.source === d.id) nb.add(le.target);
+      if (le.target === d.id) nb.add(le.source);
+    });
+    node.classed('dimmed', n => !nb.has(n.id));
+    link.classed('dimmed', le => !(nb.has(le.source) && nb.has(le.target)));
+    link.classed('highlight', le => le.source === d.id || le.target === d.id);
+  }).on('mouseout', () => {
+    node.classed('dimmed', false);
+    link.classed('dimmed', false).classed('highlight', false);
+  });
+  node.on('click', (e, d) => selectOntoConcept(d.id));
+  // 力导向
+  const spread = Math.min(W*0.7, 380);
+  nodes.forEach(n => { n.x = W/2 + (Math.random()-0.5)*spread; n.y = H/2 + (Math.random()-0.5)*Math.min(H*0.7,300); n.vx=0; n.vy=0; });
+  const linkDist = Math.max(50, Math.min(110, nodes.length * 2.2));
+  ontoSim = d3.forceSimulation(nodes).alpha(1).alphaDecay(0.02)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(linkDist).strength(0.35))
+    .force('charge', d3.forceManyBody().strength(-180).distanceMax(220))
+    .force('center', d3.forceCenter(W/2, H/2).strength(0.06))
+    .force('collide', d3.forceCollide().radius(d => Math.max(7, 5 + d.degree*0.9) + 4).strength(0.6));
+  ontoSim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+async function selectOntoConcept(id) {
+  ontoSelected = id;
+  renderOntoList();
+  // 高亮图中节点
+  d3.select('#onto-svg').selectAll('.graph-node circle')
+    .attr('stroke', d => d.id === id ? '#111' : '#fff')
+    .attr('stroke-width', d => d.id === id ? 2.5 : 1.5);
+  const detail = document.getElementById('onto-detail');
+  detail.innerHTML = '<div class="empty">加载中…</div>';
+  try {
+    const r = await fetch(API + '/api/ontology/concepts/' + encodeURIComponent(id) + '/expand?depth=2');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const c = d.concept || {};
+    const color = ONTO_TYPE_COLORS[c.type] || '#787774';
+    let html = `<h4>${esc(c.name)}</h4>` +
+      `<span class="onto-type-badge" style="background:${color}22;color:${color}">${esc(c.type)}</span>`;
+    if (c.description) html += `<div class="onto-desc">${esc(c.description)}</div>`;
+    // 祖先链
+    if (d.ancestors && d.ancestors.length) {
+      html += '<h5>祖先链</h5>' + d.ancestors.map(a =>
+        `<div class="onto-rel" onclick="selectOntoConcept('${esc(a.id)}')"><span class="rt">is_a</span><span>${esc(a.name)}</span></div>`).join('');
+    }
+    // 子概念
+    if (d.children && d.children.length) {
+      html += '<h5>子概念</h5>' + d.children.map(ch =>
+        `<div class="onto-rel" onclick="selectOntoConcept('${esc(ch.id)}')"><span class="rt">child</span><span>${esc(ch.name)}</span></div>`).join('');
+    }
+    // 关系
+    if (d.relations && d.relations.length) {
+      html += '<h5>关系</h5>' + d.relations.map(r => {
+        const name = r.target_name || r.source_name || '';
+        const rid = r.direction === 'out' ? r.target : r.source;
+        return `<div class="onto-rel" onclick="selectOntoConcept('${esc(rid)}')"><span class="rt">${esc(r.type)}</span><span>${esc(name)}</span><span class="ct">${r.direction}</span></div>`;
+      }).join('');
+    }
+    // 绑定文档
+    if (d.bindings && d.bindings.length) {
+      html += '<h5>绑定文档</h5>' + d.bindings.map(b =>
+        `<div class="onto-bind"><span class="bt">[${esc(b.binding_type)}]</span> ${esc(b.title || b.doc_id)}</div>`).join('');
+    }
+    if (d.related_concepts && d.related_concepts.length) {
+      html += '<h5>相关概念（N跳）</h5>' + d.related_concepts.slice(0, 12).map(rc =>
+        `<div class="onto-rel" onclick="selectOntoConcept('${esc(rc.id)}')"><span>${esc(rc.name)}</span><span class="ct">${esc(rc.type)}</span></div>`).join('');
+    }
+    detail.innerHTML = html || '<div class="empty">无更多信息</div>';
+  } catch (e) {
+    detail.innerHTML = '<div class="empty">加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function ontoExport() {
+  try {
+    const r = await fetch(API + '/api/ontology/export');
+    const yaml = await r.text();
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'concepts.yaml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { alert('导出失败: ' + e.message); }
+}
+
+async function ontoImport() {
+  if (!confirm('从 ontology/concepts.yaml 重新导入本体？\n（会保留已有概念，幂等 UPSERT）')) return;
+  try {
+    const r = await fetch(API + '/api/ontology/import', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    alert(`导入完成：新增 ${d.imported||0}，更新 ${d.updated||0}，错误 ${d.errors?.length||0}`);
+    loadOntology();
+  } catch (e) { alert('导入失败: ' + e.message); }
+}
+
+async function ontoBuild() {
+  const hint = prompt('LLM 辅助本体构建\n输入领域提示（可留空）：', '');
+  if (hint === null) return;
+  try {
+    const r = await fetch(API + '/api/ontology/build', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ domain_hint: hint }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    alert(`构建完成：提议 ${d.concepts?.length||0} 概念，${d.relations?.length||0} 关系\nYAML: ${d.output_yaml || '(未生成)'}`);
+    loadOntology();
+  } catch (e) { alert('构建失败: ' + e.message); }
 }
 
 // ── Init ──
