@@ -42,6 +42,7 @@ import pipeline  # noqa: E402
 import seed  # noqa: E402
 import wiki_runtime as wr  # noqa: E402
 import zvec_client  # noqa: E402
+import maintenance_scheduler as ms  # noqa: E402
 
 # ====================================================================== #
 #  应用
@@ -1035,6 +1036,144 @@ def ontology_build(req: BuildOntologyRequest):
         )
     except llm.LLMError as e:
         raise HTTPException(502, str(e))
+
+
+# ====================================================================== #
+#  Phase 4 自动化 & 增强检索路由（对应 AI推理引擎.md W3/W4 补全）
+# ====================================================================== #
+class SetConceptStatusRequest(BaseModel):
+    concept_id: str
+    status: str  # approved | pending | rejected
+
+
+class RollbackRequest(BaseModel):
+    snapshot_path: str
+
+
+class ReindexRequest(BaseModel):
+    repo_path: str
+    old_ref: str
+    new_ref: str
+    commit_hash: str | None = None
+
+
+class MaintenanceRunRequest(BaseModel):
+    repo_path: str | None = None
+    scan_days: int = 30
+    top_n: int = 10
+    use_llm: bool = True
+
+
+class MaintenanceStartRequest(BaseModel):
+    interval_hours: int = 24
+    repo_path: str | None = None
+    scan_days: int = 30
+    use_llm: bool = True
+
+
+@app.get("/api/ontology/review/pending")
+def ontology_pending_review():
+    """列出待审核概念（W4.5 概念审核流）。"""
+    return {"concepts": ontology.get_pending_review()}
+
+
+@app.post("/api/ontology/review")
+def ontology_set_status(req: SetConceptStatusRequest):
+    """设置概念审核状态（approved/pending/rejected）。"""
+    if req.status not in ("approved", "pending", "rejected"):
+        raise HTTPException(400, "status 必须为 approved/pending/rejected")
+    result = ontology.set_concept_status(req.concept_id, req.status)
+    if result is None:
+        raise HTTPException(404, f"概念 {req.concept_id} 不存在")
+    return result
+
+
+@app.post("/api/ontology/snapshot")
+def ontology_snapshot():
+    """快照当前本体（W4.4 版本快照）。返回快照文件路径。"""
+    try:
+        path = ontology.snapshot_concepts_versions()
+        return {"snapshot_path": path}
+    except Exception as e:
+        raise HTTPException(500, f"快照失败: {e}")
+
+
+@app.post("/api/ontology/rollback")
+def ontology_rollback(req: RollbackRequest):
+    """从快照回滚本体（W4.4）。"""
+    result = ontology.rollback_concepts(req.snapshot_path)
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+@app.get("/api/analytics/query-log")
+def analytics_query_log(limit: int = 200, top_n: int = 10):
+    """查询日志盲区分析（W4.3）：发现未命中任何已审核概念的高频问题。"""
+    return wr.query_log_analysis(limit=limit, top_n=top_n)
+
+
+@app.post("/api/pipeline/reindex-changed")
+def pipeline_reindex_changed(req: ReindexRequest):
+    """Git 增量索引（W4.1）：对 old_ref..new_ref 变更文件重新入库并绑定 commit。"""
+    return wr.reindex_changed_files(
+        repo_path=req.repo_path, old_ref=req.old_ref, new_ref=req.new_ref,
+        commit_hash=req.commit_hash,
+    )
+
+
+@app.get("/api/search/grep")
+def search_grep(pattern: str, topk: int = 10):
+    """跨库全文正则扫描（W3.7 策略2 独立化）。"""
+    return {"pattern": pattern, "results": wr.grep_documents(pattern, topk=topk)}
+
+
+# ====================================================================== #
+#  W4.2 本体定期维护调度器
+# ====================================================================== #
+@app.post("/api/maintenance/run")
+def maintenance_run(req: MaintenanceRunRequest):
+    """手动触发一次本体维护：扫描文档+查询盲区 → 提议新概念(proposed) → 快照。"""
+    return ms.run_maintenance(
+        repo_path=req.repo_path, scan_days=req.scan_days,
+        top_n=req.top_n, use_llm=req.use_llm,
+    )
+
+
+@app.get("/api/maintenance/status")
+def maintenance_status():
+    """调度器状态 + 上次运行摘要。"""
+    return ms.scheduler_status()
+
+
+@app.post("/api/maintenance/start")
+def maintenance_start(req: MaintenanceStartRequest):
+    """启动后台定时维护调度器（需 apscheduler，可选依赖）。"""
+    return ms.start_scheduler(
+        interval_hours=req.interval_hours, repo_path=req.repo_path,
+        scan_days=req.scan_days, use_llm=req.use_llm,
+    )
+
+
+@app.post("/api/maintenance/stop")
+def maintenance_stop():
+    """停止后台调度器。"""
+    return ms.stop_scheduler()
+
+
+@app.get("/api/maintenance/report")
+def maintenance_report():
+    """读取最近一次维护报告。"""
+    rep = ms.get_last_report()
+    if rep is None:
+        return {"note": "尚无维护报告，请先运行维护"}
+    return rep
+
+
+@app.get("/api/maintenance/proposals")
+def maintenance_proposals():
+    """列出待审核（proposed）概念，即维护产生的提议。"""
+    return {"concepts": ontology.get_pending_review()}
 
 
 # ====================================================================== #

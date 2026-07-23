@@ -174,6 +174,7 @@ def ingest_file(
 
     # 代码文件：提取结构化符号索引（索引 D：函数/类/调用链），随文档落库
     code_symbols = None
+    commit_ts = _resolve_commit_ts(commit_hash, str(path.parent)) if commit_hash else None
     if ftype == "code":
         try:
             import code_analyzer
@@ -193,6 +194,7 @@ def ingest_file(
             tags=tags,
             code_symbols=code_symbols,
             commit_hash=commit_hash,
+            commit_ts=commit_ts,
         )
     except Exception as e:
         return {"status": "error", "file": str(file_path), "reason": f"SurrealDB 写入失败: {e}"}
@@ -371,6 +373,7 @@ def ingest_text(
 
     # 代码内容：提取结构化符号索引（索引 D），随文档落库
     code_symbols = None
+    commit_ts = _resolve_commit_ts(commit_hash, os.getcwd()) if commit_hash else None
     if chunk_type == "code":
         try:
             import code_analyzer
@@ -389,6 +392,7 @@ def ingest_text(
             tags=tags,
             code_symbols=code_symbols,
             commit_hash=commit_hash,
+            commit_ts=commit_ts,
         )
     except Exception as e:
         return {"status": "error", "reason": f"SurrealDB 写入失败: {e}"}
@@ -452,6 +456,23 @@ def _infer_tags(file_path: str) -> list[str]:
         tags.append(parent_name)
 
     return tags
+
+
+def _resolve_commit_ts(commit_hash: str, repo_dir: str | None = None) -> int | None:
+    """解析 commit 的 author 时间戳（epoch 秒），绑定到文档便于 since_commit 区间过滤。"""
+    if not commit_hash:
+        return None
+    try:
+        import subprocess
+        repo = repo_dir or os.getcwd()
+        out = subprocess.run(
+            ["git", "-C", repo, "show", "-s", "--format=%ct", commit_hash],
+            capture_output=True, text=True, timeout=15,
+        )
+        ts = out.stdout.strip()
+        return int(ts) if ts.isdigit() else None
+    except Exception:
+        return None
 
 
 # ====================================================================== #

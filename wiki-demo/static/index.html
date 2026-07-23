@@ -369,6 +369,51 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .hot-doc-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s var(--ease); }
 .hot-doc-item:hover { border-color: var(--border-strong); }
 .hot-doc-item .hot-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+/* ── 分析 Tab / 问答增强 / 搜索增强 / 本体状态（W2–W4 补全） ── */
+.analytics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; padding:20px; }
+.analytics-card { background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius); padding:16px 18px; }
+.analytics-card h3 { margin:0 0 6px; font-size:15px; }
+.muted { color:var(--text-tertiary); font-size:12px; font-weight:400; }
+.analytics-card p { margin:0 0 12px; }
+.form-row { display:flex; gap:8px; margin-bottom:8px; }
+.analytics-input { flex:1; min-width:0; padding:8px 10px; border:1px solid var(--border-strong); border-radius:6px; font-family:var(--font-sans); font-size:13px; background:var(--surface); color:var(--text); }
+.analytics-result { margin-top:12px; font-size:13px; }
+.analytics-result .blind { padding:6px 0; border-bottom:1px dashed var(--border); }
+.analytics-result .blind .q { color:var(--text); }
+.analytics-result .blind .c { color:var(--text-tertiary); margin-left:8px; }
+.sb-toggle { font-size:12px; color:var(--text-secondary); display:flex; align-items:center; gap:4px; user-select:none; white-space:nowrap; }
+.score-badges { display:inline-flex; gap:4px; margin-left:8px; }
+.sb { font-size:10px; padding:1px 5px; border-radius:4px; font-family:var(--font-mono,monospace); }
+.sb.semantic { background:#E8F0F7; color:#1F6C9F; }
+.sb.concept { background:#EDE6F5; color:#6B3FA0; }
+.sb.struct { background:#E6F0E6; color:#346538; }
+.sb.fresh { background:#FBF1DD; color:#956400; }
+.code-ref { font-size:12px; color:var(--text-tertiary); margin:2px 0; font-family:var(--font-mono,monospace); }
+.conf-badge { display:inline-block; background:var(--surface-sunken); border:1px solid var(--border-strong); border-radius:20px; padding:2px 10px; font-size:12px; color:var(--text-secondary); margin:6px 8px 0 0; }
+.clarify-box { background:#FBF1DD; border:1px solid #E6C200; color:#7a5c00; border-radius:6px; padding:8px 12px; margin-top:8px; font-size:13px; }
+.clarify-box .cand { display:inline-block; background:#fff; border:1px solid #E6C200; border-radius:4px; padding:1px 8px; margin:2px 4px 2px 0; font-size:12px; }
+.reasoning-path { margin-top:10px; background:var(--surface-sunken); border:1px solid var(--border-strong); border-radius:6px; padding:10px 12px; }
+.rp-title { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+.rp-edge { display:inline-block; background:var(--surface); border:1px solid var(--border-strong); border-radius:4px; padding:2px 8px; font-size:12px; color:var(--text); font-family:var(--font-mono,monospace); }
+.rp-edge.root { border-color:#1F6C9F; color:#1F6C9F; font-weight:600; }
+.rp-arrow { margin:0 6px; color:var(--text-tertiary); }
+.rp-evidence { margin-top:8px; font-size:12px; color:var(--text-tertiary); }
+.rp-evidence .ev-doc { display:inline-block; background:var(--surface); border:1px solid var(--border-strong); border-radius:4px; padding:1px 8px; margin:2px 4px 2px 0; }
+.uncertain-box { margin-top:10px; background:#F2F2F0; border:1px solid var(--border-strong); border-radius:6px; padding:8px 12px; font-size:13px; }
+.uncertain-box .unc-title { font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+.uncertain-box ul { margin:0; padding-left:18px; }
+.status-chip-sm { display:inline-block; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:6px; }
+.status-chip-sm.ok { background:#E6F0E6; color:#346538; }
+.status-chip-sm.pend { background:#FBF1DD; color:#956400; }
+.status-chip-sm.rej { background:#F7E4E3; color:#9F2F2D; }
+.onto-status-row { margin-top:10px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.onto-mini { font-size:11px; padding:2px 8px; border:1px solid var(--border-strong); border-radius:5px; background:var(--surface); color:var(--text-secondary); cursor:pointer; }
+.onto-mini.rej { color:#9F2F2D; border-color:#9F2F2D; }
+.code-symbols { margin-top:12px; }
+.code-symbols .sym { display:flex; gap:8px; padding:4px 0; border-bottom:1px dashed var(--border); font-size:13px; }
+.code-symbols .sym .kind { color:var(--text-tertiary); font-family:var(--font-mono,monospace); min-width:54px; }
+.code-symbols .sym .loc { color:var(--text-tertiary); margin-left:auto; font-family:var(--font-mono,monospace); }
+
 </style>
 </head>
 <body>
@@ -395,12 +440,15 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     <button class="tab" data-tab="metadata">元数据</button>
     <button class="tab" data-tab="ontology">本体</button>
     <button class="tab" data-tab="ask">问答</button>
+    <button class="tab" data-tab="analytics">分析</button>
   </div>
 
   <!-- ── Search bar (library + graph) ── -->
   <div class="search-bar" id="search-bar">
     <input type="text" id="search-input" placeholder="搜索知识库（四路融合：向量 + 全文 + 图 + 元数据）…">
     <button onclick="doSearch()">搜索</button>
+    <label class="sb-toggle"><input type="checkbox" id="search-code"> 代码检索</label>
+    <label class="sb-toggle"><input type="checkbox" id="search-grep"> 正则 grep</label>
   </div>
 
   <!-- ── Library view ── -->
@@ -418,7 +466,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <div class="upload-buttons">
             <label class="upload-btn">
               选择文件
-              <input type="file" id="file-input" multiple accept=".md,.txt,.markdown" style="display:none;" onchange="handleFileSelect(event)">
+              <input type="file" id="file-input" multiple accept=".md,.txt,.markdown,.pdf,.html,.htm,.json,.yaml,.yml,.py,.js,.ts" style="display:none;" onchange="handleFileSelect(event)">
             </label>
             <label class="upload-btn">
               选择文件夹
@@ -691,6 +739,9 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="onto-btn" onclick="ontoImport()">导入 YAML</button>
           <button class="onto-btn" onclick="ontoBuild()">LLM 构建</button>
           <button class="onto-btn primary" onclick="loadOntology()">刷新</button>
+          <button class="onto-btn" onclick="ontoPendingReview()">待审核</button>
+          <button class="onto-btn" onclick="ontoSnapshot()">快照</button>
+          <button class="onto-btn" onclick="ontoRollback()">回滚</button>
         </div>
       </div>
       <div class="onto-main">
@@ -703,6 +754,57 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <div class="onto-legend" id="onto-legend"></div>
         </div>
         <div class="onto-detail" id="onto-detail"><div class="empty">点击概念节点查看详情</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- ── Analytics view ── -->
+  <div class="view" id="view-analytics">
+    <div class="analytics-grid">
+      <div class="analytics-card">
+        <h3>查询日志盲区分析 <span class="muted">(W4.3)</span></h3>
+        <p class="muted">统计最近对话，列出未命中任何已审核概念的高频问题，提示本体待补充方向。</p>
+        <button class="onto-btn primary" onclick="runQueryLog()">分析最近查询</button>
+        <div id="query-log-result" class="analytics-result"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>Git 增量索引 <span class="muted">(W4.1)</span></h3>
+        <p class="muted">对两个提交之间变更的文件重新入库，并绑定 commit hash 便于按提交追溯。</p>
+        <div class="form-row">
+          <input type="text" id="reindex-repo" placeholder="仓库路径（如 /path/to/repo）" class="analytics-input">
+        </div>
+        <div class="form-row">
+          <input type="text" id="reindex-old" placeholder="old_ref（如 HEAD~1）" class="analytics-input">
+          <input type="text" id="reindex-new" placeholder="new_ref（如 HEAD）" class="analytics-input">
+        </div>
+        <button class="onto-btn" onclick="doReindex()">执行增量索引</button>
+        <div id="reindex-result" class="analytics-result"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>本体版本管理 <span class="muted">(W4.4)</span></h3>
+        <p class="muted">快照当前本体到 YAML，或从历史快照回滚。定期维护时建议先快照再改动。</p>
+        <div class="form-row">
+          <button class="onto-btn" onclick="ontoSnapshot()">创建快照</button>
+          <button class="onto-btn" onclick="ontoRollback()">从快照回滚</button>
+        </div>
+        <div id="ontology-version-result" class="analytics-result"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>本体定期维护 <span class="muted">(W4.2)</span></h3>
+        <p class="muted">定时扫描近期文档与查询盲区，借助 LLM 提议新概念（写入 proposed 待审核），并生成本体快照。</p>
+        <div class="form-row">
+          <input type="text" id="maint-repo" placeholder="仓库路径（可选，留空用当前目录）" class="analytics-input">
+        </div>
+        <div class="form-row">
+          <input type="number" id="maint-scan" value="30" min="0" placeholder="扫描近 N 天" class="analytics-input" style="width:48%">
+          <input type="number" id="maint-interval" value="24" min="1" placeholder="调度间隔(h)" class="analytics-input" style="width:48%">
+        </div>
+        <div class="form-row">
+          <button class="onto-btn primary" onclick="runMaintenance()">立即运行维护</button>
+          <button class="onto-btn" onclick="startMaintenance()">启动定时</button>
+          <button class="onto-btn" onclick="stopMaintenance()">停止</button>
+        </div>
+        <div id="maintenance-result" class="analytics-result"></div>
+        <div id="maintenance-status" class="muted" style="margin-top:6px;"></div>
       </div>
     </div>
   </div>
@@ -721,11 +823,12 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.tab).classList.add('active');
     // search bar only for library + graph
-    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata' || t.dataset.tab === 'ontology') ? 'none' : 'flex';
+    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata' || t.dataset.tab === 'ontology' || t.dataset.tab === 'analytics') ? 'none' : 'flex';
     if (t.dataset.tab === 'graph') renderGraph();
     if (t.dataset.tab === 'metadata') loadMetadata();
     if (t.dataset.tab === 'ask') loadHotDocs();
     if (t.dataset.tab === 'ontology') loadOntology();
+    if (t.dataset.tab === 'analytics') { renderAnalytics(); loadMaintenanceStatus(); }
   });
 });
 
@@ -820,10 +923,12 @@ async function showDocDetail(docId) {
         <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="back-btn" onclick="exportDoc('${doc.id}')">导出 Markdown</button>
           <button class="back-btn" onclick="showVersionChain('${doc.id}')">版本历史</button>
+          <button class="back-btn" onclick="loadCodeSymbols('${doc.id}')">代码符号</button>
           ${document.getElementById('status-llm').classList.contains('ok')
             ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>` : ''}
           <button class="back-btn" style="color:var(--red-fg);border-color:var(--red-fg);" onclick="deleteDocument('${doc.id}')">删除文档</button>
         </div>
+        <div id="code-symbols-container"></div>
         <div id="version-chain-container"></div>
         ${relHtml}
       </div>`;
@@ -883,31 +988,62 @@ async function extractEntities(docId) {
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) return;
+  const grepMode = document.getElementById('search-grep').checked;
+  const codeMode = document.getElementById('search-code').checked;
   document.getElementById('doc-list').style.display = 'none';
   document.getElementById('doc-detail').style.display = 'none';
   const container = document.getElementById('search-results-container');
   container.style.display = 'block';
   const el = document.getElementById('search-results');
-  el.innerHTML = '<div class="loading">四路融合检索中</div>';
+  el.innerHTML = '<div class="loading">' + (grepMode ? '全文正则扫描中' : '四路融合检索中') + '</div>';
   try {
-    const r = await fetch(API + `/api/search?q=${encodeURIComponent(q)}&topk=10`);
-    const d = await r.json();
+    let d;
+    if (grepMode) {
+      const r = await fetch(API + `/api/search/grep?pattern=${encodeURIComponent(q)}&topk=10`);
+      d = await r.json();
+      const res = d.results || [];
+      document.getElementById('routes-summary').textContent = `grep 命中: ${res.length}`;
+      if (!res.length) { el.innerHTML = '<div class="empty"><div class="icon">🔍</div>未找到匹配</div>'; return; }
+      el.innerHTML = res.map(r => `
+        <div class="search-result" onclick="showDocDetail('${r.doc_id}')">
+          <div class="title">${esc(r.title)} <span class="score">${r.hit_count} 命中</span></div>
+          <div class="excerpt">${esc(r.excerpt || '')}</div>
+        </div>`).join('');
+      return;
+    }
+    const r = await fetch(API + `/api/search?q=${encodeURIComponent(q)}&topk=10&code=${codeMode}`);
+    d = await r.json();
     const routes = d.routes || {};
     document.getElementById('routes-summary').textContent =
-      `向量:${routes.vector||0} · 全文:${routes.fts||0} · 图:${routes.graph||0} · 元数据:${routes.meta||0}`;
+      `向量:${routes.vector||0} · 全文:${routes.fts||0} · 图:${routes.graph||0} · 元数据:${routes.meta||0}` + (codeMode ? ' · 代码:✓' : '');
     if (!d.results.length) {
       el.innerHTML = '<div class="empty"><div class="icon">🔍</div>未找到相关文档</div>';
       return;
     }
-    el.innerHTML = d.results.map(r => `
+    el.innerHTML = d.results.map(r => {
+      const scores = renderScoreBadges(r);
+      const code = (r.file_path || r.function_name)
+        ? `<div class="code-ref">📄 ${esc(r.file_path || '')}${r.function_name ? ' · ' + esc(r.function_name) : ''}</div>` : '';
+      return `
       <div class="search-result" onclick="showDocDetail('${r.doc_id}')">
         <div class="title">${esc(r.title)} <span class="score">${r.score}</span></div>
         <div class="excerpt">${esc(r.excerpt || '')}</div>
-        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}</div>
-      </div>`).join('');
+        ${code}
+        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}${scores}</div>
+      </div>`;
+    }).join('');
   } catch (e) {
     el.innerHTML = '<div class="empty"><div class="icon">⚠</div>检索失败</div>';
   }
+}
+
+function renderScoreBadges(r) {
+  const parts = [];
+  if (r.semantic_score != null) parts.push(`<span class="sb semantic" title="语义分">S:${r.semantic_score}</span>`);
+  if (r.concept_score != null) parts.push(`<span class="sb concept" title="概念距离分">C:${r.concept_score}</span>`);
+  if (r.structural_score != null) parts.push(`<span class="sb struct" title="结构相关分">R:${r.structural_score}</span>`);
+  if (r.freshness_score != null) parts.push(`<span class="sb fresh" title="新鲜度分">F:${r.freshness_score}</span>`);
+  return parts.length ? '<span class="score-badges">' + parts.join('') + '</span>' : '';
 }
 
 // ── Graph (D3.js) ──
@@ -1487,6 +1623,31 @@ function askThis(q) {
   document.getElementById('ask-input').value = q;
   doAsk();
 }
+function askExtrasHtml(d) {
+  if (!d) return '';
+  let h = '';
+  if (d.confidence != null) {
+    h += `<span class="conf-badge">置信度 ${Math.round(d.confidence * 100)}%</span>`;
+  }
+  if (d.clarification_needed) {
+    const cands = (d.clarification_candidates || []).map(c => `<span class="cand">${esc(c)}</span>`).join('');
+    h += `<div class="clarify-box">⚠ 问题较宽泛，可能影响准确性。建议明确方向：${cands}</div>`;
+  }
+  const op = d.ontology_path || [];
+  const rp = op.find(s => s.step === '推理路径');
+  if (rp && rp.edges && rp.edges.length) {
+    const chain = rp.edges.map(e => `<span class="rp-edge ${e.is_root ? 'root' : ''}">${esc(e.relation)}</span>`).join('<span class="rp-arrow">→</span>');
+    h += `<div class="reasoning-path"><div class="rp-title">推理路径（沿本体关系边）</div>${chain}</div>`;
+    if (rp.evidence_docs && rp.evidence_docs.length) {
+      h += `<div class="rp-evidence">命中文档：${rp.evidence_docs.map(t => `<span class="ev-doc">${esc(t)}</span>`).join('')}</div>`;
+    }
+  }
+  if (d.uncertainties && d.uncertainties.length) {
+    h += `<div class="uncertain-box"><div class="unc-title">ⓘ 回答中的不确定点</div><ul>${d.uncertainties.map(u => `<li>${esc(u)}</li>`).join('')}</ul></div>`;
+  }
+  return h;
+}
+
 async function doAsk() {
   const q = document.getElementById('ask-input').value.trim();
   if (!q) return;
@@ -1512,6 +1673,7 @@ async function doAsk() {
       </div>` : '';
     el.innerHTML = `<div class="answer-box">
       <div class="answer">${esc(d.answer)}</div>
+      ${askExtrasHtml(d)}
       <div class="meta-info">迭代: ${d.iterations} · 耗时: ${d.elapsed}s · 工具调用: ${d.trace.length}</div>
       ${traceHtml}
     </div>`;
@@ -2429,9 +2591,12 @@ function renderOntoList() {
     const rows = groups[type].map(c => {
       const color = ONTO_TYPE_COLORS[c.type] || '#787774';
       const active = ontoSelected === c.id ? ' active' : '';
+      const st = c.status || 'approved';
+      const stCls = st === 'approved' ? 'ok' : (st === 'pending' ? 'pend' : 'rej');
       return `<div class="onto-item${active}" onclick="selectOntoConcept('${esc(c.id)}')">` +
         `<div class="onto-dot" style="background:${color}"></div>` +
         `<span class="nm">${esc(c.name)}</span>` +
+        `<span class="status-chip-sm ${stCls}">${st}</span>` +
         `<span class="ct">${c.children_count||0}/${c.binding_count||0}</span></div>`;
     }).join('');
     return head + rows;
@@ -2567,6 +2732,11 @@ async function selectOntoConcept(id) {
     let html = `<h4>${esc(c.name)}</h4>` +
       `<span class="onto-type-badge" style="background:${color}22;color:${color}">${esc(c.type)}</span>`;
     if (c.description) html += `<div class="onto-desc">${esc(c.description)}</div>`;
+    const st = c.status || 'approved';
+    html += `<div class="onto-status-row">状态: <span class="status-chip-sm ${st==='approved'?'ok':st==='pending'?'pend':'rej'}">${st}</span>` +
+      `<button class="onto-mini" onclick="ontoSetStatus('${esc(c.id)}','approved')">通过</button>` +
+      `<button class="onto-mini" onclick="ontoSetStatus('${esc(c.id)}','pending')">待定</button>` +
+      `<button class="onto-mini rej" onclick="ontoSetStatus('${esc(c.id)}','rejected')">驳回</button></div>`;
     // 祖先链
     if (d.ancestors && d.ancestors.length) {
       html += '<h5>祖先链</h5>' + d.ancestors.map(a =>
@@ -2634,6 +2804,177 @@ async function ontoBuild() {
     alert(`构建完成：提议 ${d.concepts?.length||0} 概念，${d.relations?.length||0} 关系\nYAML: ${d.output_yaml || '(未生成)'}`);
     loadOntology();
   } catch (e) { alert('构建失败: ' + e.message); }
+}
+
+// ── 分析 / 本体审核 / 代码符号（W2–W4 补全） ──
+async function runQueryLog() {
+  const el = document.getElementById('query-log-result');
+  el.innerHTML = '<div class="loading">分析中</div>';
+  try {
+    const r = await fetch(API + '/api/analytics/query-log?limit=200&top_n=10');
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="blind">⚠ ${esc(d.error)}</div>`; return; }
+    if (!d.blind_spots || !d.blind_spots.length) {
+      el.innerHTML = `<div class="blind">✓ 最近 ${d.total||0} 条查询均命中已审核概念（覆盖 ${d.covered_concepts||0} 个），暂无盲区。</div>`;
+      return;
+    }
+    el.innerHTML = `<div class="blind">共 ${d.total||0} 条查询，覆盖 ${d.covered_concepts||0} 个已审核概念。以下为未命中高频问题（本体待补充方向）：</div>` +
+      d.blind_spots.map(b => `<div class="blind"><span class="q">${esc(b.question)}</span><span class="c">×${b.count}</span></div>`).join('');
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function doReindex() {
+  const el = document.getElementById('reindex-result');
+  const repo = document.getElementById('reindex-repo').value.trim();
+  const oldRef = document.getElementById('reindex-old').value.trim();
+  const newRef = document.getElementById('reindex-new').value.trim();
+  if (!repo || !oldRef || !newRef) { el.innerHTML = '<div class="blind">⚠ 请填写仓库路径与两个 ref</div>'; return; }
+  el.innerHTML = '<div class="loading">增量索引中</div>';
+  try {
+    const r = await fetch(API + '/api/pipeline/reindex-changed', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ repo_path: repo, old_ref: oldRef, new_ref: newRef }),
+    });
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="blind">⚠ ${esc(d.error)}</div>`; return; }
+    el.innerHTML = `<div class="blind">变更文件 ${d.changed||0} 个，成功重索引 ${d.reindexed||0} 个。</div>`;
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function ontoSnapshot() {
+  const el = document.getElementById('ontology-version-result');
+  el.innerHTML = '<div class="loading">快照中</div>';
+  try {
+    const r = await fetch(API + '/api/ontology/snapshot', { method: 'POST' });
+    const d = await r.json();
+    el.innerHTML = `<div class="blind">✓ 快照已创建：<br><code>${esc(d.snapshot_path||'')}</code></div>`;
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function ontoRollback() {
+  const path = prompt('输入快照文件路径（从「创建快照」结果复制）：', '');
+  if (!path) return;
+  const el = document.getElementById('ontology-version-result');
+  el.innerHTML = '<div class="loading">回滚中</div>';
+  try {
+    const r = await fetch(API + '/api/ontology/rollback', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ snapshot_path: path }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || '回滚失败');
+    el.innerHTML = `<div class="blind">✓ 回滚完成（导入 ${d.imported||0} / 更新 ${d.updated||0}）</div>`;
+    loadOntology();
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function ontoPendingReview() {
+  const statsEl = document.getElementById('onto-stats');
+  try {
+    const r = await fetch(API + '/api/ontology/review/pending');
+    const d = await r.json();
+    const pending = d.concepts || [];
+    if (!pending.length) {
+      statsEl.innerHTML = '<span class="onto-chip">无待审核概念</span>';
+      ontoConcepts = ontoConcepts.filter(c => c.status !== 'pending');
+      renderOntoList();
+      return;
+    }
+    statsEl.innerHTML = `<span class="onto-chip" style="background:#FBF1DD;color:#956400">待审核 ${pending.length}</span>`;
+    ontoConcepts = pending;
+    renderOntoList();
+  } catch (e) { statsEl.innerHTML = '<span class="onto-chip">加载失败</span>'; }
+}
+
+async function ontoSetStatus(conceptId, status) {
+  try {
+    const r = await fetch(API + '/api/ontology/review', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ concept_id: conceptId, status }),
+    });
+    if (!r.ok) { const e = await r.json(); alert('审核失败: ' + (e.detail || r.status)); return; }
+    selectOntoConcept(conceptId);
+    loadOntology();
+  } catch (e) { alert('审核失败: ' + e.message); }
+}
+
+async function loadCodeSymbols(docId) {
+  const el = document.getElementById('code-symbols-container');
+  el.innerHTML = '<div class="loading">加载代码符号</div>';
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/code-symbols`);
+    if (!r.ok) { el.innerHTML = ''; return; }
+    const d = await r.json();
+    const syms = d.symbols || [];
+    if (!syms.length) { el.innerHTML = '<div class="code-symbols muted">该文档无代码符号索引</div>'; return; }
+    el.innerHTML = `<div class="code-symbols"><h4>代码符号（${syms.length}）</h4>` +
+      syms.map(s => `<div class="sym"><span class="kind">${esc(s.kind||'')}</span><span>${esc(s.name||'')}</span><span class="loc">${s.line ? '行 '+s.line : ''}</span></div>`).join('') +
+      `</div>`;
+  } catch (e) { el.innerHTML = ''; }
+}
+
+function renderAnalytics() { /* 懒加载占位：按钮触发各自分析 */ }
+
+// ── W4.2 本体定期维护调度器 ──
+async function loadMaintenanceStatus() {
+  const el = document.getElementById('maintenance-status');
+  if (!el) return;
+  try {
+    const r = await fetch(API + '/api/maintenance/status');
+    const d = await r.json();
+    const last = d.last_run ? `上次运行: ${esc(String(d.last_run))}` : '尚未运行';
+    const sched = d.running ? `定时运行中（每 ${d.interval_hours}h）` : '未启动定时';
+    el.innerHTML = `<div>状态：${sched}；${last}</div>` + (d.note ? `<div class="muted">${esc(d.note)}</div>` : '');
+  } catch (e) { el.innerHTML = ''; }
+}
+
+async function runMaintenance() {
+  const el = document.getElementById('maintenance-result');
+  const repo = document.getElementById('maint-repo').value.trim();
+  const scan = parseInt(document.getElementById('maint-scan').value, 10) || 30;
+  el.innerHTML = '<div class="loading">维护中（扫描文档+查询盲区，提议新概念）</div>';
+  try {
+    const r = await fetch(API + '/api/maintenance/run', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ repo_path: repo || null, scan_days: scan, use_llm: true }),
+    });
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="blind">⚠ ${esc(d.error)}</div>`; return; }
+    const newList = (d.proposed_new || []).map(n => `<span class="onto-chip">${esc(n)}</span>`).join(' ');
+    const blind = (d.blind_spots || []).map(b => `<div class="blind"><span class="q">${esc(b.question)}</span><span class="c">×${b.count}</span></div>`).join('');
+    el.innerHTML = `<div class="blind">扫描 ${d.scanned||0} 篇，新提议 <b>${d.proposed_new_count||0}</b> 个概念（已写入 proposed 待审核），跳过重复 ${d.skipped_existing||0} 个。</div>` +
+      (newList ? `<div style="margin:6px 0">${newList}</div>` : '') +
+      (d.snapshot_path ? `<div class="muted">已快照：<br><code>${esc(d.snapshot_path)}</code></div>` : '') +
+      (blind ? `<div style="margin-top:6px">查询盲区：</div>${blind}` : '');
+    loadMaintenanceStatus();
+    loadOntology();
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function startMaintenance() {
+  const el = document.getElementById('maintenance-status');
+  const interval = parseInt(document.getElementById('maint-interval').value, 10) || 24;
+  try {
+    const r = await fetch(API + '/api/maintenance/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ interval_hours: interval, use_llm: true }),
+    });
+    const d = await r.json();
+    if (d.status === 'unavailable') {
+      el.innerHTML = `<div class="blind">⚠ ${esc(d.reason || 'APScheduler 未安装')}。可手动运行维护。</div>`;
+    } else {
+      el.innerHTML = `<div class="blind">✓ 定时维护已启动（每 ${interval}h）</div>`;
+    }
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+async function stopMaintenance() {
+  const el = document.getElementById('maintenance-status');
+  try {
+    const r = await fetch(API + '/api/maintenance/stop', { method: 'POST' });
+    await r.json();
+    el.innerHTML = '<div class="blind">已停止定时维护</div>';
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
 }
 
 // ── Init ──

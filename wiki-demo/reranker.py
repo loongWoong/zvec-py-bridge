@@ -290,11 +290,42 @@ def rerank(
 
         scored.append(c)
 
-    # 排序 + 过滤
+    # ── Step 8 过滤规则（对齐 AI推理引擎.md）──────────────────────
+    # 仅在概念引导模式（target_concept_ids 非空）下生效，避免误伤非引导检索。
     scored.sort(key=lambda x: -x.final_score)
-    filtered = [c for c in scored if c.final_score >= min_score]
 
-    # 去重：同一概念的多个 chunk 只保留最高分
+    guided = scored
+    if target_concept_ids:
+        # 规则1：概念距离远 → 直接丢弃。
+        #   候选「有概念标注但不匹配任何目标概念」（concept_distance_score=0.1 远距离）
+        #   且语义分也弱 → 判定为概念不相关，丢弃。无概念标注的候选（中性 0.3）保留。
+        guided = [
+            c for c in scored
+            if not (c.concept_ids
+                   and c.concept_distance_score <= 0.1
+                   and c.semantic_score < 0.15)
+        ]
+
+    # 规则2：语义相似度 < 阈值 → 降权（已通过 final_score 中的 semantic_score 体现），
+    #   低于 min_score 的直接丢弃。
+    filtered = [c for c in guided if c.final_score >= min_score]
+
+    # 规则3：同一概念的多个 chunk → 合并或取最相关。
+    #   概念足迹（concept_ids 集合）完全相同的候选只保留最高分者；
+    #   无概念标注的候选不参与此合并，避免误并。
+    if target_concept_ids:
+        seen_fp: set[tuple] = set()
+        merged: list[Candidate] = []
+        for c in filtered:  # 已按 final_score 降序
+            fp = tuple(sorted(c.concept_ids)) if c.concept_ids else ()
+            if fp and fp in seen_fp:
+                continue  # 同概念足迹，已有更高分者
+            if fp:
+                seen_fp.add(fp)
+            merged.append(c)
+        filtered = merged
+
+    # 按文档去重：同一文档只保留最高分
     seen_concepts: set[str] = set()
     deduped: list[Candidate] = []
     for c in filtered:

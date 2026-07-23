@@ -32,6 +32,7 @@ DEFINE FIELD created  ON document TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated  ON document TYPE datetime DEFAULT time::now();
 DEFINE FIELD concept_ids ON document TYPE option<array>;
 DEFINE FIELD commit_hash ON document TYPE option<string>;  -- W4.1 Git 增量索引绑定
+DEFINE FIELD commit_ts   ON document TYPE option<int>;      -- W4.1 提交时间戳（epoch 秒），用于 since_commit 区间过滤
 
 DEFINE TABLE raw SCHEMALESS;
 DEFINE FIELD url       ON raw TYPE option<string>;

@@ -845,6 +845,73 @@ def annotate_document_concepts(title: str, content: str,
     return []
 
 
+PROPOSE_SYSTEM_PROMPT = """\
+你是一个本体维护助手。给定一批知识库文档的标题与摘要，以及已有的概念列表，
+请提出【尚未在概念列表中】的、值得纳入本体的新概念。
+
+规则：
+- 概念应是对知识库内容具有解释价值的机制/组件/流程/问题/配置，而非普通词汇
+- 不要重复已有概念列表中的名称
+- 每个概念给出简短 description（一句话）和 type（mechanism|component|process|problem|configuration|concept）
+
+仅输出如下 JSON（不要多余文字）：
+{
+  "concepts": [
+    {"name": "概念名", "type": "mechanism", "description": "一句话说明"}
+  ]
+}
+"""
+
+
+def propose_new_concepts(docs: list[dict], existing_names: set[str] | list[str],
+                         top_n: int = 10) -> list[dict]:
+    """从文档样本中提议新的本体概念（供定期维护调度器 W4.2 使用）。
+
+    返回 [{name, type, description}, ...]，已过滤掉 existing_names 中已有的名称。
+    LLM 不可达或失败时返回空列表（调用方退化为盲区启发式）。
+    """
+    if not docs:
+        return []
+    existing = {str(n).lower() for n in (existing_names or [])}
+    samples = []
+    for d in docs[:50]:
+        title = d.get("title", "")
+        content = (d.get("content") or d.get("summary") or "")[:300]
+        samples.append(f"- 标题: {title}\n  摘要: {content}")
+    docs_text = "\n".join(samples)
+    existing_text = ", ".join(sorted(existing)) if existing else "(空)"
+
+    messages = [
+        {"role": "system", "content": PROPOSE_SYSTEM_PROMPT},
+        {"role": "user", "content": (
+            f"## 已有概念\n{existing_text}\n\n"
+            f"## 知识库文档样本\n{docs_text}\n\n"
+            f"请提出至多 {top_n} 个尚未在概念列表中的新概念。"
+        )},
+    ]
+    try:
+        data = _call_llm_safe(messages, temperature=0.4)
+        content, _ = _parse_llm_response(data)
+        result = _extract_json(_clean_answer(content))
+    except Exception:
+        return []
+    concepts = (result or {}).get("concepts", []) if isinstance(result, dict) else []
+    out: list[dict] = []
+    for c in concepts:
+        name = (c.get("name") or "").strip()
+        if not name or name.lower() in existing:
+            continue
+        out.append({
+            "name": name,
+            "type": c.get("type", "concept"),
+            "description": c.get("description", ""),
+        })
+        existing.add(name.lower())
+        if len(out) >= top_n:
+            break
+    return out
+
+
 def run_agent(question: str, max_iterations: int = 8,
               use_ontology: bool = True,
               use_rerank: bool = True) -> dict:

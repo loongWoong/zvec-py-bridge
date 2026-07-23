@@ -146,7 +146,7 @@ def search(query: str, topk: int = 5) -> list[dict]:
         "embedding": {"function": config.EMBED_FUNC_NAME, "field": config.VECTOR_FIELD},
         "queries": [{"field_name": config.VECTOR_FIELD, "text": query}],
         "topk": topk,
-        "output_fields": ["document_id", "title", "heading", "content"],
+        "output_fields": ["document_id", "title", "heading", "content", "concept_ids"],
     })
     if r.status_code != 200:
         raise ZvecError(f"检索失败: ({r.status_code}) {r.text[:200]}", r.status_code)
