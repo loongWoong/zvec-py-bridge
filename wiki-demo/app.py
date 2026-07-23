@@ -59,6 +59,10 @@ _state: dict = {
     "llm": False,
 }
 
+# 是否在启动时后台修复概念绑定稀疏问题（使 Re-Rank 概念距离因子生效）。
+# 默认关闭：避免每次启动都触发 LLM 标注，按需用 POST /api/repair-bindings 触发。
+REPAIR_BINDINGS_ON_STARTUP = False
+
 
 @app.on_event("startup")
 def startup():
@@ -146,6 +150,17 @@ def startup():
     except Exception as e:
         print(f"  ⚠ 本体种子灌入异常: {e}")
 
+    # 6. （可选）启动后后台修复概念绑定稀疏问题，使 Re-Rank 概念距离因子生效
+    if REPAIR_BINDINGS_ON_STARTUP and _state.get("llm"):
+        def _bg_repair():
+            try:
+                res = pipeline.repair_concept_bindings(limit=200)
+                print(f"  ✓ 概念绑定修复完成: {res}")
+            except Exception as e:
+                print(f"  ⚠ 概念绑定修复失败: {e}")
+        threading.Thread(target=_bg_repair, daemon=True).start()
+        print("  ♦ 概念绑定修复后台进行中（不阻塞服务）...")
+
     _state["started"] = True
     print("=" * 60)
     print(f"  访问 http://localhost:{config.WIKI_PORT}")
@@ -158,6 +173,15 @@ def startup():
 class SearchRequest(BaseModel):
     query: str
     topk: int = 5
+    code: bool = False  # 是否叠加第五路「代码结构化检索」（需已定位概念）
+
+
+class CodeSearchRequest(BaseModel):
+    query: str
+    topk: int = 10
+    concept_ids: list[str] | None = None   # 直接指定概念 ID
+    concept_names: list[str] | None = None  # 或指定概念名（自动解析为 ID）
+    auto_locate: bool = True                # 未指定概念时，是否用 LLM 自动定位概念
 
 
 class AskRequest(BaseModel):
@@ -551,15 +575,118 @@ def build_graph(doc_id: str):
 #  搜索（四路融合）
 # ====================================================================== #
 @app.get("/api/search")
-def search(q: str, topk: int = 5):
-    """四路融合检索。"""
-    return wr.search_documents(q, topk=topk)
+def search(q: str, topk: int = 5, code: bool = False):
+    """四路融合检索（可选叠加第五路代码结构化检索）。"""
+    return wr.search_documents(q, topk=topk, code_route=code)
 
 
 @app.post("/api/search")
 def search_post(req: SearchRequest):
-    """四路融合检索（POST）。"""
-    return wr.search_documents(req.query, topk=req.topk)
+    """四路融合检索（POST，可选叠加第五路代码结构化检索）。"""
+    return wr.search_documents(req.query, topk=req.topk, code_route=req.code)
+
+
+# ====================================================================== #
+#  代码结构化检索（索引 D / 策略5 [调用链]）
+# ====================================================================== #
+def _resolve_concept_ids(req: CodeSearchRequest) -> tuple[list[str], list[str]]:
+    """将请求中的概念名/ID 解析为概念 ID 列表，返回 (ids, notes)。
+
+    优先级：concept_ids > concept_names > 自动定位（需 LLM）。
+    """
+    ids: list[str] = list(req.concept_ids or [])
+    notes: list[str] = []
+    try:
+        import ontology
+        if req.concept_names:
+            name_to_id = {c["name"]: c["id"] for c in ontology.list_concepts()}
+            for n in req.concept_names:
+                if n in name_to_id:
+                    ids.append(name_to_id[n])
+                else:
+                    notes.append(f"概念名未命中: {n}")
+        if not ids and req.auto_locate and _state.get("llm"):
+            try:
+                import concept_locator
+                located = concept_locator.locate(req.query)
+                names = [c["name"] for c in located.get("located_concepts", [])]
+                names += [c["name"] for c in located.get("implicit_concepts", [])]
+                name_to_id = {c["name"]: c["id"] for c in ontology.list_concepts()}
+                for n in names:
+                    if n in name_to_id and name_to_id[n] not in ids:
+                        ids.append(name_to_id[n])
+                notes.append(f"自动定位概念: {names}")
+            except Exception as e:
+                notes.append(f"自动定位失败: {e}")
+    except Exception as e:
+        notes.append(f"本体不可用: {e}")
+    # 去重
+    seen = set()
+    unique = []
+    for i in ids:
+        if i not in seen:
+            seen.add(i)
+            unique.append(i)
+    return unique, notes
+
+
+@app.post("/api/code-search")
+def code_search_post(req: CodeSearchRequest):
+    """结构化代码检索：按概念绑定的文件路径，提取符号表/调用链并匹配查询。
+
+    对应 AI推理引擎.md Step 4 索引 D（结构化索引/代码专用）与策略5 [调用链]。
+    不依赖 tree-sitter：用 code_analyzer 正则提取函数/类/调用关系。
+    """
+    concept_ids, notes = _resolve_concept_ids(req)
+    if not concept_ids:
+        return {"query": req.query, "results": [], "notes": notes,
+                "reason": "未解析到概念，无法定位代码文件"}
+    results = wr.search_documents(
+        req.query, topk=req.topk, use_rerank=False,
+        concept_ids=concept_ids, code_route=True,
+    ).get("results", [])
+    # 仅保留代码路线命中
+    code_results = [r for r in results if "code" in (r.get("sources") or [])]
+    return {"query": req.query, "concept_ids": concept_ids,
+            "results": code_results, "notes": notes}
+
+
+@app.get("/api/code-search")
+def code_search_get(q: str, topk: int = 10,
+                    concept_ids: str | None = None,
+                    concept_names: str | None = None):
+    """结构化代码检索（GET）。concept_ids / concept_names 用逗号分隔。"""
+    parsed = CodeSearchRequest(
+        query=q, topk=topk,
+        concept_ids=[s.strip() for s in concept_ids.split(",")] if concept_ids else None,
+        concept_names=[s.strip() for s in concept_names.split(",")] if concept_names else None,
+    )
+    return code_search_post(parsed)
+
+
+@app.get("/api/documents/{doc_id}/code-symbols")
+def document_code_symbols(doc_id: str):
+    """返回文档落库时提取的代码符号索引（索引 D，仅代码文档有）。"""
+    doc = wr.get_document(doc_id)
+    if not doc:
+        raise HTTPException(404, f"文档 {doc_id} 不存在")
+    symbols = doc.get("code_symbols")
+    if not symbols:
+        return {"doc_id": doc_id, "has_code_symbols": False,
+                "reason": "非代码文档或未提取符号"}
+    return {"doc_id": doc_id, "has_code_symbols": True, **symbols}
+
+
+@app.post("/api/repair-bindings")
+def repair_bindings(limit: int = 200):
+    """重新标注现有文档的概念绑定（LLM 多选 + 关键词兜底）。
+
+    用于修复概念绑定稀疏问题，使 Re-Rank 的概念距离因子真正生效。
+    返回 {scanned, updated, errors}。依赖 LLM（标注阶段）。
+    """
+    if not _state.get("llm"):
+        raise HTTPException(503, "LLM 不可达，无法重新标注概念")
+    return pipeline.repair_concept_bindings(limit=limit)
 
 
 # ====================================================================== #

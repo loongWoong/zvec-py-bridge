@@ -118,6 +118,8 @@ def create_document(
     tags: list[str] | None = None,
     entities: list[dict] | None = None,
     relations: list[dict] | None = None,
+    code_symbols: dict | None = None,
+    commit_hash: str | None = None,
 ) -> dict:
     """创建 Wiki 文档对象，可选同时建立 tag/entity/relation 关系边。
 
@@ -138,6 +140,8 @@ def create_document(
             content = $content,
             topic_id = $topic_id,
             author = $author,
+            code_symbols = $code_symbols,
+            commit_hash = $commit_hash,
             status = 'active',
             version = 1,
             created = time::now(),
@@ -145,6 +149,7 @@ def create_document(
     """, {
         "title": title, "summary": summary,
         "content": content, "topic_id": topic_id, "author": author,
+        "code_symbols": code_symbols, "commit_hash": commit_hash,
     })
 
     # 建立关系边
@@ -1059,9 +1064,92 @@ def version_chain(doc_id: str) -> list[dict]:
 # ====================================================================== #
 #  Search Service — 四路融合检索（对应 design.md 第九节）
 # ====================================================================== #
+def _fetch_doc_meta(doc_ids: list[str]) -> dict[str, dict]:
+    """批量获取文档的 concept_ids 与 updated_at（文档级概念绑定）。
+
+    供 search_documents 召回后回填候选，使 Re-Rank 的"概念距离分"(β) 与
+    "新鲜度分"(δ) 因子真正生效（见 AI推理引擎.md Step 8）。
+    LLM/DB 不可达时返回空 dict。
+    """
+    if not doc_ids:
+        return {}
+    try:
+        norm = [_rid("document", d) if ":" not in d else d for d in doc_ids]
+        rows = _q(
+            "SELECT id, concept_ids, updated FROM document WHERE id IN $ids",
+            {"ids": norm},
+        )
+        out: dict[str, dict] = {}
+        for r in _flatten(rows):
+            if not isinstance(r, dict):
+                continue
+            did = _extract_id(r.get("id", ""))
+            ids = r.get("concept_ids") or []
+            if not isinstance(ids, list):
+                continue
+            up = r.get("updated")
+            if hasattr(up, "isoformat"):   # SurrealDB datetime 对象 → ISO 串
+                up = up.isoformat()
+            out[did] = {"concept_ids": ids, "updated_at": up or ""}
+        return out
+    except Exception:
+        return {}
+
+
+def _attach_concept_ids(ranked: dict) -> None:
+    """就地给 RRF 去重后的候选字典附加 concept_ids 与 updated_at（按 doc_id 索引）。"""
+    meta_map = _fetch_doc_meta(list(ranked.keys()))
+    for did, info in ranked.items():
+        m = meta_map.get(did, {})
+        info["concept_ids"] = m.get("concept_ids", [])
+        info["updated_at"] = m.get("updated_at", "")
+
+
+# ====================================================================== #
+#  W2.6 检索结果短期缓存（风险对策：相同概念组合检索结果短期缓存）
+#  key = (query + topk + use_rerank + 概念组合 + code_route)，TTL 5 分钟
+# ====================================================================== #
+_SEARCH_CACHE_TTL = 300
+_SEARCH_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+def _search_cache_key(query: str, topk: int, use_rerank: bool,
+                      concept_ids: list[str] | None, code_route: bool) -> str:
+    """计算检索缓存键（概念组合参与哈希，保证不同概念场景不串缓存）。"""
+    import hashlib
+    key = (
+        f"{query}|{topk}|{use_rerank}|"
+        f"{tuple(concept_ids or [])}|{code_route}"
+    )
+    return hashlib.md5(key.encode("utf-8")).hexdigest()
+
+
+def _filter_since_commit(results: list[dict], since_commit: str | None) -> list[dict]:
+    """W4.1：按 commit 过滤检索结果（仅保留绑定到指定提交的文档）。"""
+    if not since_commit or not results:
+        return results
+    ids = [r.get("doc_id", "") for r in results if r.get("doc_id")]
+    if not ids:
+        return results
+    try:
+        rows = _q(
+            "SELECT id, commit_hash FROM document WHERE id IN $ids",
+            {"ids": ids},
+        )
+        cmap = {
+            _extract_id(d.get("id", "")): d.get("commit_hash")
+            for d in _flatten(rows) if isinstance(d, dict)
+        }
+    except Exception:
+        return results
+    return [r for r in results if cmap.get(r.get("doc_id", "")) == since_commit]
+
+
 def search_documents(query: str, topk: int = 5,
                      use_rerank: bool = True,
-                     concept_ids: list[str] | None = None) -> dict:
+                     concept_ids: list[str] | None = None,
+                     code_route: bool = False,
+                     since_commit: str | None = None) -> dict:
     """四路并行融合检索：向量 + 全文 + 图 + 元数据 → Re-Rank 精排。
 
     返回 {
@@ -1072,6 +1160,17 @@ def search_documents(query: str, topk: int = 5,
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import threading
+
+    # W2.6：检索结果短期缓存（相同 query+概念组合 5min 内直接返回，省重复 LLM/DB 调用）
+    _ck = _search_cache_key(query, topk, use_rerank, concept_ids, code_route)
+    _now = time.time()
+    if _ck in _SEARCH_CACHE:
+        _ts, _val = _SEARCH_CACHE[_ck]
+        if _now - _ts < _SEARCH_CACHE_TTL:
+            _val = dict(_val)
+            _val["cached"] = True
+            return _val
+        del _SEARCH_CACHE[_ck]
 
     routes_count = {"vector": 0, "fts": 0, "graph": 0, "meta": 0}
     all_candidates: list[dict] = []
@@ -1087,13 +1186,16 @@ def search_documents(query: str, topk: int = 5,
             print(f"  ⚠ {name}检索失败: {e}")
             return []
 
-    # ── 四路并行检索（P0-2）──
+    # ── 四路并行检索（P0-2）── 可选叠加第五路「代码结构化检索」
     futures_map: dict = {}
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures_map[executor.submit(_collect_route, "vector", _search_vector, query, topk)] = "vector"
         futures_map[executor.submit(_collect_route, "fts", _fts_search, query, topk)] = "fts"
         futures_map[executor.submit(_collect_route, "graph", _graph_search, query, topk)] = "graph"
         futures_map[executor.submit(_collect_route, "meta", _metadata_search, query, topk)] = "meta"
+        # 第五路（索引 D / 策略5）：仅当显式开启且已定位概念时，按概念绑定的文件路径做结构化代码检索
+        if code_route and concept_ids:
+            futures_map[executor.submit(_collect_route, "code", _code_search, query, topk, concept_ids)] = "code"
 
         for future in as_completed(futures_map):
             name = futures_map[future]
@@ -1123,6 +1225,47 @@ def search_documents(query: str, topk: int = 5,
                 if route:
                     rrf_ranked[did]["sources"].add(route)
 
+            # 附加文档级概念，使 Re-Rank 概念距离因子生效
+            _attach_concept_ids(rrf_ranked)
+
+            # 从候选自身收集 file_path/function_name（用于回填候选显示）
+            file_meta: dict[str, dict] = {}
+            for c in all_candidates:
+                did = c.get("doc_id", "")
+                fp = c.get("file_path")
+                fn = c.get("function_name")
+                if fp:
+                    file_meta.setdefault(did, {})["file_path"] = fp
+                if fn:
+                    file_meta.setdefault(did, {})["function_name"] = fn
+
+            # 结构相关性参考集（γ 因子）：优先取自目标概念绑定的真实文件/函数
+            # —— 设计意图是"候选是否在同一调用链/同一模块"，而非候选自我匹配。
+            reference_files: list[str] = []
+            reference_functions: list[str] = []
+            if concept_ids:
+                try:
+                    import ontology as _onto
+                    seen_ref: set[str] = set()
+                    for cid in concept_ids:
+                        for b in _onto.get_bindings(cid):
+                            fp = b.get("file_path", "")
+                            fn = b.get("function_name", "")
+                            if fp and fp not in seen_ref:
+                                reference_files.append(fp)
+                                seen_ref.add(fp)
+                            if fn and fn not in seen_ref:
+                                reference_functions.append(fn)
+                                seen_ref.add(fn)
+                except Exception:
+                    pass
+            # 无概念绑定时回退为候选自身集合（保持降级行为，区分度弱但可用）
+            if not reference_files and not reference_functions:
+                reference_files = [m["file_path"] for m in file_meta.values() if m.get("file_path")]
+                reference_functions = [
+                    m["function_name"] for m in file_meta.values() if m.get("function_name")
+                ]
+
             candidates_for_rerank = [
                 {
                     "doc_id": did,
@@ -1130,14 +1273,23 @@ def search_documents(query: str, topk: int = 5,
                     "excerpt": info["excerpt"],
                     "score": round(info["score"], 4),
                     "sources": sorted(info["sources"]),
+                    "concept_ids": info.get("concept_ids", []),
+                    "updated_at": info.get("updated_at", ""),
+                    "file_path": file_meta.get(did, {}).get("file_path", ""),
+                    "function_name": file_meta.get(did, {}).get("function_name", ""),
                 }
                 for did, info in rrf_ranked.items()
             ]
 
             reranked = reranker.rerank(candidates_for_rerank, query, topk=topk,
-                                       target_concept_ids=concept_ids)
-            return {"query": query, "results": reranked, "routes": routes_count,
+                                       target_concept_ids=concept_ids,
+                                       reference_files=reference_files or None,
+                                       reference_functions=reference_functions or None)
+            reranked = _filter_since_commit(reranked, since_commit)
+            _val = {"query": query, "results": reranked, "routes": routes_count,
                     "reranked": True}
+            _SEARCH_CACHE[_ck] = (_now, _val)
+            return _val
         except Exception as e:
             print(f"  ⚠ Re-Rank 失败，降级到 RRF: {e}")
 
@@ -1155,6 +1307,9 @@ def search_documents(query: str, topk: int = 5,
         if route:
             ranked[did]["sources"].add(route)
 
+    # 附加文档级概念
+    _attach_concept_ids(ranked)
+
     results = []
     for doc_id, info in sorted(ranked.items(), key=lambda x: -x[1]["score"]):
         results.append({
@@ -1162,10 +1317,14 @@ def search_documents(query: str, topk: int = 5,
             "title": info["title"],
             "score": round(info["score"], 4),
             "sources": sorted(info["sources"]),
+            "concept_ids": info.get("concept_ids", []),
             "excerpt": info["excerpt"],
         })
 
-    return {"query": query, "results": results[:topk], "routes": routes_count}
+    _val = {"query": query, "results": _filter_since_commit(results[:topk], since_commit),
+            "routes": routes_count}
+    _SEARCH_CACHE[_ck] = (_now, _val)
+    return _val
 
 
 def _search_vector(query: str, topk: int) -> list[dict]:
@@ -1240,6 +1399,62 @@ def _fts_search(query: str, topk: int) -> list[dict]:
             "excerpt": (d.get("content", "") or "")[:120],
         })
     return results
+
+
+def grep_documents(pattern: str, topk: int = 10) -> list[dict]:
+    """跨库全文正则扫描（W3.7 策略2 独立化）。
+
+    与概念绑定文件 grep 不同，这里对**全部**文档 content 做正则匹配（不限绑定文件），
+    作为本体检索计划的独立一路，命中按次数降序。
+
+    返回 [{doc_id, title, excerpt, hit_count}, ...]。
+    """
+    if not pattern or len(pattern.strip()) < 2:
+        return []
+    safe = pattern.replace("'", "")
+    try:
+        # 优先：正则匹配（string::matches 返回数组，取其长度作为命中数）
+        sql = (
+            f"SELECT id, title, content, "
+            f"array::len(string::matches(content, '{safe}')) AS hit_count "
+            f"FROM document WHERE string::matches(content, '{safe}') LIMIT {topk}"
+        )
+        rows = _q(sql)
+        docs = _flatten(rows)
+        results = []
+        for d in docs:
+            if not isinstance(d, dict):
+                continue
+            results.append({
+                "doc_id": _extract_id(d.get("id", "")),
+                "title": d.get("title", ""),
+                "excerpt": (d.get("content", "") or "")[:120],
+                "hit_count": d.get("hit_count") or 0,
+            })
+        if results:
+            results.sort(key=lambda x: -x.get("hit_count", 0))
+            return results
+    except Exception:
+        pass
+    # 降级：子串匹配
+    try:
+        sql = (
+            f"SELECT id, title, content FROM document "
+            f"WHERE string::lowercase(content) CONTAINS string::lowercase('{safe}') LIMIT {topk}"
+        )
+        rows = _q(sql)
+        docs = _flatten(rows)
+        return [
+            {
+                "doc_id": _extract_id(d.get("id", "")),
+                "title": d.get("title", ""),
+                "excerpt": (d.get("content", "") or "")[:120],
+                "hit_count": 1,
+            }
+            for d in docs if isinstance(d, dict)
+        ]
+    except Exception:
+        return []
 
 
 def _graph_search(query: str, topk: int) -> list[dict]:
@@ -1361,6 +1576,88 @@ def _metadata_search(query: str, topk: int) -> list[dict]:
     return results[:topk]
 
 
+def _code_search(query: str, topk: int,
+                 target_concept_ids: list[str] | None = None) -> list[dict]:
+    """结构化代码检索（对应 AI推理引擎.md Step 4 索引 D / 策略5 [调用链]）。
+
+    入口为「概念绑定的文件路径」：bind_concept 时写入的 file_path 指向真实代码文件。
+    读取这些文件 → code_analyzer 提取符号表/调用链 → 按 query 匹配符号或 grep 内容，
+    返回带 file_path + function_name 的结构化命中，供 Re-Rank 结构相关性因子使用。
+
+    仅在 target_concept_ids 非空时生效（即已通过本体定位到具体概念）。
+    """
+    if not target_concept_ids:
+        return []
+    try:
+        import os
+        import ontology
+        import code_analyzer
+    except Exception:
+        return []
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    seen_files: set[str] = set()
+    results: list[dict] = []
+    keywords = [w for w in re.split(r"[\s,，。、_/]+", query) if len(w) >= 2]
+
+    for cid in target_concept_ids:
+        try:
+            bindings = ontology.get_bindings(cid)
+        except Exception:
+            continue
+        for b in bindings:
+            fp = b.get("file_path", "")
+            if not fp or fp in seen_files:
+                continue
+            # 解析路径：绝对路径优先，否则尝试相对工作区
+            if not os.path.isabs(fp) and not os.path.exists(fp):
+                cand = os.path.join(base_dir, fp)
+                fp = cand if os.path.exists(cand) else fp
+            if not os.path.isfile(fp):
+                continue
+            seen_files.add(fp)
+
+            analysis = code_analyzer.analyze_file(fp)
+            if not analysis:
+                continue
+
+            doc_id = b.get("doc_id", "")
+            title = b.get("title", "") or os.path.basename(fp)
+            matches = code_analyzer.search_symbols(analysis, query)
+
+            if not matches:
+                # grep 回退：在文件中直接搜关键词（对应策略2）
+                for kw in keywords:
+                    for h in code_analyzer.grep_in_analysis(analysis, kw)[:3]:
+                        results.append({
+                            "doc_id": doc_id, "title": title,
+                            "excerpt": f"{os.path.basename(fp)}:{h['line']}  {h['content'].strip()[:120]}",
+                            "file_path": fp, "function_name": "",
+                            "sources": ["code"], "score": 0.4,
+                        })
+                continue
+
+            for m in matches:
+                call_part = f" | 调用: {', '.join(m['calls'][:8])}" if m.get("calls") else ""
+                results.append({
+                    "doc_id": doc_id, "title": title,
+                    "excerpt": f"{m['kind']} {m['name']} @ {os.path.basename(fp)}:{m['line']}{call_part}",
+                    "file_path": fp, "function_name": m["name"],
+                    "sources": ["code"], "score": m.get("score", 0.5),
+                })
+
+    # 去重（同 doc_id + function_name + title）
+    seen_keys: set[tuple] = set()
+    unique: list[dict] = []
+    for r in results:
+        k = (r.get("doc_id", ""), r.get("function_name", ""), r.get("title", ""))
+        if k in seen_keys:
+            continue
+        seen_keys.add(k)
+        unique.append(r)
+    return unique[:topk]
+
+
 # ====================================================================== #
 #  RawSource Service（对应 design.md 第一节："raw 文档也是对象"）
 # ====================================================================== #
@@ -1419,6 +1716,97 @@ def link_raw(doc_id: str, raw_id: str) -> dict:
     relate(doc_rid, "references", raw_rid)
     relate(doc_rid, "updated_by", raw_rid)
     return {"doc_id": doc_rid, "raw_id": raw_rid, "linked": True}
+
+
+# ====================================================================== #
+#  W4.1 / W4.3 自动化维护
+# ====================================================================== #
+def list_documents_by_commit(commit_hash: str) -> list[dict]:
+    """W4.1：返回绑定到指定 commit 的文档列表（按提交追溯索引）。"""
+    try:
+        rows = _q(
+            "SELECT id, title, commit_hash FROM document WHERE commit_hash = $h",
+            {"h": commit_hash},
+        )
+        docs = _flatten(rows)
+        return [
+            {"doc_id": _extract_id(d.get("id", "")), "title": d.get("title", "")}
+            for d in docs if isinstance(d, dict)
+        ]
+    except Exception:
+        return []
+
+
+def reindex_changed_files(repo_path: str, old_ref: str, new_ref: str,
+                          commit_hash: str | None = None) -> dict:
+    """W4.1：Git 增量索引。
+
+    对 old_ref..new_ref 之间变更的文件重新入库（仅重建变更文件的索引），
+    并将 new_ref 作为 commit_hash 绑定到对应文档，便于按提交追溯。
+    依赖仓库内可执行 `git`。
+    """
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "-C", repo_path, "diff", "--name-only", old_ref, new_ref],
+            capture_output=True, text=True, timeout=60,
+        )
+    except Exception as e:
+        return {"error": f"git diff 失败: {e}"}
+    changed = [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]
+    if not changed:
+        return {"changed": 0, "reindexed": 0, "results": []}
+    try:
+        import pipeline
+    except Exception as e:
+        return {"error": f"pipeline 不可用: {e}"}
+    results: list[dict] = []
+    reindexed = 0
+    for rel in changed:
+        fp = str(Path(repo_path) / rel)
+        try:
+            r = pipeline.ingest_file(fp, commit_hash=commit_hash, skip_existing=False)
+            results.append(r)
+            if r.get("status") == "ok":
+                reindexed += 1
+        except Exception as e:
+            results.append({"file": rel, "status": "error", "reason": str(e)})
+    return {"changed": len(changed), "reindexed": reindexed, "results": results}
+
+
+def query_log_analysis(limit: int = 200, top_n: int = 10) -> dict:
+    """W4.3：查询日志分析，发现本体盲区。
+
+    统计最近 limit 条对话，将完全未命中任何已审核概念的高频问题列为盲区候选，
+    供 Phase 4「本体定期维护」生成补充概念建议。
+    """
+    try:
+        rows = _q(f"SELECT question FROM conversation ORDER BY created DESC LIMIT {limit}")
+        convs = _flatten(rows)
+    except Exception:
+        return {"error": "无法读取对话日志"}
+    questions = [c.get("question", "") for c in convs if isinstance(c, dict) and c.get("question")]
+    if not questions:
+        return {"total": 0, "blind_spots": []}
+    concept_names: set[str] = set()
+    try:
+        import ontology
+        concept_names = {c["name"].lower() for c in ontology.list_concepts(status="approved")}
+    except Exception:
+        pass
+    from collections import Counter
+    counter: Counter = Counter()
+    for q in questions:
+        ql = q.lower()
+        hit = any(name in ql for name in concept_names if len(name) >= 2)
+        if not hit:
+            counter[q.strip()] += 1
+    blind_spots = [{"question": q, "count": n} for q, n in counter.most_common(top_n)]
+    return {
+        "total": len(questions),
+        "covered_concepts": len(concept_names),
+        "blind_spots": blind_spots,
+    }
 
 
 # ====================================================================== #

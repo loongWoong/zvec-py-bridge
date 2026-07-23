@@ -76,6 +76,8 @@ def detect_type(file_path: str) -> str:
         return "code"
     if ext in STRUCTURED_EXTS:
         return "yaml"
+    if ext in (".html", ".htm"):
+        return "html"
     return "text"
 
 
@@ -162,17 +164,12 @@ def _split_markdown(content: str, file_path: str, max_chunk_chars: int = 2000) -
             chunks.extend(sub_chunks)
             chunk_idx += len(sub_chunks)
         else:
-            chunk_idx += 1
-            chunks.append(Chunk(
-                chunk_id=f"{Path(file_path).stem}_c{chunk_idx}",
-                chunk_index=chunk_idx,
-                chunk_type="md",
-                text=section_text,
-                file_path=file_path,
-                heading=heading_text,
-                start_line=start + 1,
-                end_line=end,
-            ))
+            # 短 section：按段落切分，使表格块成为独立 table chunk（不切断行）
+            sub_chunks = _split_section_by_paragraphs(
+                section_text, file_path, heading_text, start + 1, chunk_idx, max_chunk_chars
+            )
+            chunks.extend(sub_chunks)
+            chunk_idx += len(sub_chunks)
 
     return chunks
 
@@ -181,17 +178,57 @@ def _split_section_by_paragraphs(
     text: str, file_path: str, heading: str,
     base_line: int, start_idx: int, max_chars: int,
 ) -> list[Chunk]:
-    """将超长 section 按段落二次切分，不切断代码块。"""
-    # 按双换行切分，但合并代码块内的段落
+    """将超长 section 按段落二次切分，不切断代码块，且不切断表格。
+
+    - 表格块（含 | 与分隔行）整体作为一个 chunk，chunk_type="table"
+    - 超长 section 拆出的子 chunk 写入 parent_summary（父块前 100 字）以保上下文
+    """
     paragraphs = _smart_split_paragraphs(text)
     chunks: list[Chunk] = []
     buffer: list[str] = []
     buf_len = 0
     chunk_idx = start_idx
     current_line = base_line
+    parent_summary = text[:100]
 
     for para in paragraphs:
-        para_len = len(para)
+        para_text = para["text"]
+        para_is_table = para["is_table"]
+        para_len = len(para_text)
+        if para_is_table:
+            # 表格块始终独立成 chunk：先 flush 已有的普通段落 buffer
+            if buffer:
+                chunk_idx += 1
+                chunk_text = "\n\n".join(buffer)
+                chunks.append(Chunk(
+                    chunk_id=f"{Path(file_path).stem}_c{chunk_idx}",
+                    chunk_index=chunk_idx,
+                    chunk_type="md",
+                    text=chunk_text,
+                    file_path=file_path,
+                    heading=heading,
+                    start_line=current_line,
+                    end_line=current_line + chunk_text.count("\n"),
+                    metadata={"parent_summary": parent_summary},
+                ))
+                current_line += chunk_text.count("\n") + 2
+                buffer = []
+                buf_len = 0
+            # 表格自身单独成块
+            chunk_idx += 1
+            chunks.append(Chunk(
+                chunk_id=f"{Path(file_path).stem}_c{chunk_idx}",
+                chunk_index=chunk_idx,
+                chunk_type="table",
+                text=para_text,
+                file_path=file_path,
+                heading=heading,
+                start_line=current_line,
+                end_line=current_line + para_text.count("\n"),
+                metadata={"parent_summary": parent_summary},
+            ))
+            current_line += para_text.count("\n") + 2
+            continue
         if buf_len + para_len > max_chars and buffer:
             # 输出当前 buffer
             chunk_idx += 1
@@ -205,59 +242,127 @@ def _split_section_by_paragraphs(
                 heading=heading,
                 start_line=current_line,
                 end_line=current_line + chunk_text.count("\n"),
+                metadata={"parent_summary": parent_summary},
             ))
             current_line += chunk_text.count("\n") + 2
             buffer = []
             buf_len = 0
-        buffer.append(para)
+        buffer.append(para_text)
         buf_len += para_len
 
     # 输出剩余 buffer
     if buffer:
         chunk_idx += 1
         chunk_text = "\n\n".join(buffer)
+        # 若整个 buffer 仅一个表格块，标为 table
+        is_single_table = (len(buffer) == 1 and _is_markdown_table(buffer[0]))
         chunks.append(Chunk(
             chunk_id=f"{Path(file_path).stem}_c{chunk_idx}",
             chunk_index=chunk_idx,
-            chunk_type="md",
+            chunk_type="table" if is_single_table else "md",
             text=chunk_text,
             file_path=file_path,
             heading=heading,
             start_line=current_line,
             end_line=current_line + chunk_text.count("\n"),
+            metadata={"parent_summary": parent_summary},
         ))
 
     return chunks
 
 
-def _smart_split_paragraphs(text: str) -> list[str]:
-    """按双换行切分段落，但保持代码块完整。"""
+def _is_markdown_table(block: str) -> bool:
+    """判断一段文本是否为 Markdown 表格（表头 + 分隔行 + 内容行）。"""
+    lines = [l.strip() for l in block.split("\n") if l.strip()]
+    if len(lines) < 2:
+        return False
+    # 分隔行：仅含 | - : 空格
+    for l in lines[1:]:
+        if re.match(r"^\s*\|?[\s:|-]+\|?\s*$", l) and "-" in l and "|" in l:
+            break
+    else:
+        return False
+    # 表头行需含 |
+    return "|" in lines[0]
+
+
+def _smart_split_paragraphs(text: str) -> list[dict]:
+    """按双换行切分段落，但保持代码块与表格块完整。
+
+    返回 [{text, is_table}, ...]，is_table 供切分器将表格块标为独立 chunk。
+    """
     in_fence = False
     current: list[str] = []
-    result: list[str] = []
+    result: list[dict] = []
 
     for line in text.split("\n"):
         if line.strip().startswith("```"):
             in_fence = not in_fence
             current.append(line)
             if not in_fence:
-                # 代码块结束
-                result.append("\n".join(current))
+                result.append({"text": "\n".join(current), "is_table": False})
                 current = []
             continue
         if in_fence:
             current.append(line)
             continue
         if line.strip() == "" and current:
-            result.append("\n".join(current))
+            blk = "\n".join(current)
+            result.append({"text": blk, "is_table": _is_markdown_table(blk)})
             current = []
         else:
             current.append(line)
 
     if current:
-        result.append("\n".join(current))
+        blk = "\n".join(current)
+        result.append({"text": blk, "is_table": _is_markdown_table(blk)})
 
-    return [p for p in result if p.strip()]
+    return [p for p in result if p["text"].strip()]
+
+
+# ====================================================================== #
+#  HTML 解析（W3.3）
+# ====================================================================== #
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_HTML_BLOCK_CLOSE_RE = re.compile(
+    r"(?i)</(p|div|section|article|li|h[1-6]|tr|table|blockquote)>"
+)
+_HTML_BR_RE = re.compile(r"(?i)<br\s*/?>")
+
+
+def _strip_html(content: str) -> str:
+    """去除 HTML 标签与脚本/样式，保留可见正文与标题层级（转为换行）。"""
+    content = re.sub(r"(?is)<script.*?</script>", " ", content)
+    content = re.sub(r"(?is)<style.*?</style>", " ", content)
+    # 块级闭合标签 → 换行，保留结构
+    content = _HTML_BLOCK_CLOSE_RE.sub("\n", content)
+    content = _HTML_BR_RE.sub("\n", content)
+    # 去其余标签
+    content = _HTML_TAG_RE.sub(" ", content)
+    # 常见实体解码
+    content = (
+        content.replace("&nbsp;", " ").replace("&amp;", "&")
+        .replace("&lt;", "<").replace("&gt;", ">")
+        .replace("&quot;", '"').replace("&#39;", "'")
+    )
+    # 合并多余空行
+    lines = [ln.strip() for ln in content.split("\n")]
+    return "\n".join(ln for ln in lines if ln)
+
+
+def _split_html(content: str, file_path: str, max_chunk_chars: int = 2000) -> list[Chunk]:
+    """解析 HTML：去标签取正文，按段落切分（chunk_type=html）。
+
+    不依赖外部库（纯正则），足以覆盖「把网页正文入库」场景。
+    """
+    text = _strip_html(content)
+    if not text.strip():
+        return []
+    chunks = _split_plain_text(text, file_path, max_chunk_chars)
+    for ch in chunks:
+        ch.chunk_type = "html"
+        ch.metadata = {**(ch.metadata or {}), "source_type": "html"}
+    return chunks
 
 
 # ====================================================================== #
@@ -565,6 +670,8 @@ def chunk_file(file_path: str, content: str | None = None,
         return _split_code(content, file_path, language, max_chunk_chars)
     elif ftype == "yaml":
         return _split_structured(content, file_path)
+    elif ftype == "html":
+        return _split_html(content, file_path, max_chunk_chars)
     else:
         return _split_plain_text(content, file_path, max_chunk_chars)
 
@@ -593,6 +700,8 @@ def chunk_text(content: str, title: str = "document",
         return _split_code(content, fake_path, "python", max_chunk_chars)
     elif chunk_type == "yaml":
         return _split_structured(content, fake_path)
+    elif chunk_type == "html":
+        return _split_html(content, fake_path, max_chunk_chars)
     else:
         return _split_plain_text(content, fake_path, max_chunk_chars)
 
@@ -621,6 +730,9 @@ def chunks_to_zvec(chunks: list[Chunk], document_id: str, title: str) -> list[di
                 "title": title,
                 "heading": ch.heading or title,
                 "content": ch.text,
+                "chunk_type": ch.chunk_type,
+                "parent_summary": (ch.metadata or {}).get("parent_summary", ""),
+                "concept_ids": (ch.metadata or {}).get("concept_ids", []),
             },
         }
         for ch in chunks

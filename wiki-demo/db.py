@@ -31,6 +31,7 @@ DEFINE FIELD version  ON document TYPE int DEFAULT 1;
 DEFINE FIELD created  ON document TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated  ON document TYPE datetime DEFAULT time::now();
 DEFINE FIELD concept_ids ON document TYPE option<array>;
+DEFINE FIELD commit_hash ON document TYPE option<string>;  -- W4.1 Git 增量索引绑定
 
 DEFINE TABLE raw SCHEMALESS;
 DEFINE FIELD url       ON raw TYPE option<string>;
@@ -118,6 +119,7 @@ DEFINE FIELD name        ON concept TYPE string;
 DEFINE FIELD description ON concept TYPE option<string>;
 DEFINE FIELD type        ON concept TYPE option<string>;  -- mechanism|component|process|problem|configuration
 DEFINE FIELD parent_id   ON concept TYPE option<string>;  -- 概念层级 is-a 关系
+DEFINE FIELD status      ON concept TYPE string DEFAULT 'approved';  -- W4.5 审核流：approved|proposed|rejected
 
 -- concept → concept 关系边（depends / triggers / contains / contrasts）
 DEFINE TABLE concept_related TYPE RELATION FROM concept TO concept SCHEMALESS;

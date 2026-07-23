@@ -122,6 +122,7 @@ def create_concept(
     description: str = "",
     parent_id: str | None = None,
     key: str | None = None,
+    status: str = "approved",
 ) -> dict:
     """创建概念节点。
 
@@ -131,9 +132,10 @@ def create_concept(
         description: 描述
         parent_id: 父概念 ID（is-a 层级）
         key: 自定义 key（默认用 name 生成）
+        status: W4.5 审核状态（approved|proposed|rejected），默认 approved
 
     Returns:
-        {id, name, type, description, parent_id, created}
+        {id, name, type, description, parent_id, status, created}
     """
     if key is None:
         key = name
@@ -146,6 +148,7 @@ def create_concept(
             type = $type,
             description = $description,
             parent_id = $parent_id,
+            status = $status,
             created = time::now(),
             updated = time::now()
     """, {
@@ -153,6 +156,7 @@ def create_concept(
         "type": concept_type,
         "description": description,
         "parent_id": parent_id,
+        "status": status,
     })
 
     # 如果有 parent，建 concept_related 边（is-a 关系）
@@ -193,10 +197,22 @@ def get_concept(concept_id: str) -> dict | None:
     return concept
 
 
-def list_concepts(concept_type: str | None = None) -> list[dict]:
-    """列出所有概念（可按类型过滤）。"""
+def list_concepts(concept_type: str | None = None, status: str | None = None) -> list[dict]:
+    """列出所有概念（可按类型 / 审核状态过滤）。
+
+    status="approved" 时只返回已审核概念（W4.5：检索只用 approved）。
+    """
+    clauses = []
+    params: dict = {}
     if concept_type:
-        rows = _q("SELECT * FROM concept WHERE type = $type ORDER BY name", {"type": concept_type})
+        clauses.append("type = $type")
+        params["type"] = concept_type
+    if status:
+        clauses.append("status = $status")
+        params["status"] = status
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    if clauses:
+        rows = _q(f"SELECT * FROM concept {where} ORDER BY name", params)
     else:
         rows = _q("SELECT * FROM concept ORDER BY name")
     results = []
@@ -210,6 +226,7 @@ def list_concepts(concept_type: str | None = None) -> list[dict]:
             "type": c.get("type", ""),
             "description": (c.get("description", "") or "")[:120],
             "parent_id": c.get("parent_id", ""),
+            "status": c.get("status", "approved"),
             "children_count": len(get_children(rid)),
             "binding_count": len(get_bindings(rid)),
         })
@@ -219,7 +236,7 @@ def list_concepts(concept_type: str | None = None) -> list[dict]:
 def update_concept(concept_id: str, **fields) -> dict | None:
     """更新概念字段。"""
     rid = concept_id if ":" in concept_id else _concept_rid(concept_id)
-    allowed = {"name", "type", "description", "parent_id"}
+    allowed = {"name", "type", "description", "parent_id", "status"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return get_concept(rid)
@@ -744,6 +761,43 @@ def import_from_yaml(file_path: str, clear_existing: bool = False) -> dict:
         "updated": updated,
         "errors": errors,
     }
+
+
+# ====================================================================== #
+#  W4.5 概念审核流 / W4.4 本体版本化
+# ====================================================================== #
+def set_concept_status(concept_id: str, status: str) -> dict | None:
+    """设置概念审核状态（approved|proposed|rejected）。"""
+    if status not in ("approved", "proposed", "rejected"):
+        return None
+    return update_concept(concept_id, status=status)
+
+
+def get_pending_review() -> list[dict]:
+    """返回待审核（proposed）的概念列表。"""
+    return list_concepts(status="proposed")
+
+
+def snapshot_concepts_versions(versions_dir: str | None = None) -> str:
+    """W4.4：将当前本体快照为带时间戳的 YAML（版本化管理，可回滚）。
+
+    默认写入 `<cwd>/ontology_versions/ontology_<YYYYMMDD_HHMMSS>.yaml`。
+    """
+    if versions_dir is None:
+        versions_dir = str(Path.cwd() / "ontology_versions")
+    Path(versions_dir).mkdir(parents=True, exist_ok=True)
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = str(Path(versions_dir) / f"ontology_{ts}.yaml")
+    export_to_yaml(path)
+    return path
+
+
+def rollback_concepts(snapshot_path: str) -> dict:
+    """W4.4：回滚本体到指定快照（先清空再导入，谨慎使用）。"""
+    if not Path(snapshot_path).exists():
+        return {"error": f"快照不存在: {snapshot_path}"}
+    return import_from_yaml(snapshot_path, clear_existing=True)
 
 
 # ====================================================================== #

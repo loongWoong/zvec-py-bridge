@@ -49,7 +49,10 @@ LOCATE_SYSTEM_PROMPT = """\
     {"name": "隐含概念名", "confidence": 0.6, "reason": "推测原因"}
   ],
   "constraints": {"频率": "偶尔", "触发点": "登录后"},
-  "expected_output": "用户期望的回答类型：排查步骤/概念解释/操作指南"
+  "expected_output": "用户期望的回答类型：排查步骤/概念解释/操作指南",
+  "candidates": [
+    {"name": "备选概念名", "reason": "用户问题可能也相关但置信度较低的概念"}
+  ]
 }
 """
 
@@ -73,8 +76,8 @@ CLASSIFY_SYSTEM_PROMPT = """\
 # ====================================================================== #
 
 def _get_concept_list_text() -> str:
-    """生成概念列表文本（供 LLM 阅读）。"""
-    concepts = ontology.list_concepts()
+    """生成概念列表文本（供 LLM 阅读）。仅含已审核（approved）概念。"""
+    concepts = ontology.list_concepts(status="approved")
     if not concepts:
         return "(概念列表为空)"
 
@@ -96,15 +99,16 @@ def locate(query: str) -> dict:
     Args:
         query: 用户自然语言问题
 
-    Returns:
+        Returns:
         {
             intent_type: str,
             located_concepts: [{name, confidence, reason}],
             implicit_concepts: [{name, confidence, reason}],
             constraints: dict,
-            expected_output: str
+            expected_output: str,
+            candidates: [{name, reason}]
         }
-    """
+        """
     concepts_text = _get_concept_list_text()
 
     messages = [
@@ -127,9 +131,14 @@ def locate(query: str) -> dict:
             "implicit_concepts": [],
             "constraints": {},
             "expected_output": "一般回答",
+            "candidates": [],
             "error": f"LLM 输出无法解析: {content[:200]}",
         }
 
+    # 归一化 candidates 字段（低置信反问功能使用）
+    cands = result.get("candidates")
+    if not isinstance(cands, list):
+        result["candidates"] = []
     return result
 
 

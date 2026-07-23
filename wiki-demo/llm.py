@@ -17,11 +17,13 @@ import wiki_runtime as wr
 # 可选导入：本体相关模块（需 surrealdb）。缺失时 use_ontology/use_rerank 自动降级。
 try:
     import concept_locator
+    import ontology
     import ontology_traversal
     import reranker
     _ONTOLOGY_DEPS = True
 except ImportError:
     concept_locator = None     # type: ignore
+    ontology = None            # type: ignore
     ontology_traversal = None  # type: ignore
     reranker = None            # type: ignore
     _ONTOLOGY_DEPS = False
@@ -143,6 +145,27 @@ def _clean_answer(text: str) -> str:
         return text
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return text.strip()
+
+
+def _split_uncertainties(answer: str) -> tuple[str, list[str]]:
+    """从最终回答中分离「不确定点」围栏块，返回 (清洁后的回答, 不确定点列表)。
+
+    对应 AGENT_SYSTEM_PROMPT 的 <<UNCERTAINTIES>> 约定（W2.3 不确定说明）。
+    若没有该块则原样返回、列表为空。
+    """
+    if not answer:
+        return answer, []
+    m = re.search(r"<<UNCERTAINTIES>>\s*(.*?)\s*<<UNCERTAINTIES>>", answer, re.DOTALL)
+    if not m:
+        return answer, []
+    block = m.group(1).strip()
+    clean = (answer[:m.start()] + answer[m.end():]).strip()
+    items: list[str] = []
+    for line in block.split("\n"):
+        line = line.strip().lstrip("-").strip()
+        if line and line != "无":
+            items.append(line)
+    return clean, items
 
 
 def _extract_json(text: str) -> dict | None:
@@ -534,9 +557,292 @@ AGENT_SYSTEM_PROMPT = """\
 - 如果工具返回 error 字段，如实说明失败原因
 - 不能把工具调用失败描述为成功
 
+## 不确定点输出（必须）
+- 在最终回答的末尾，用如下围栏块列出「证据盲区 / 矛盾点 / 假设」：
+  <<UNCERTAINTIES>>
+  - 证据盲区：本文档未覆盖的环节 XXX
+  - 矛盾点：文档A与文档B关于Y说法不一致，需进一步核实
+  - 假设：默认用户环境为 Z（若适用）
+  <<UNCERTAINTIES>>
+- 若确实没有不确定点，输出：<<UNCERTAINTIES>>\n无\n<<UNCERTAINTIES>>
+- 该块会被系统解析为结构化字段，不会展示给用户，请勿在正文中重复解释。
+
 ## 知识库
 知识库包含关于 LLM、Transformer、Attention、BERT、RAG、Embedding、向量数据库、HNSW、Agent、Prompt、Fine-tuning 的中文 Wiki 文档，以及它们之间的关系图。
 """
+
+
+# ====================================================================== #
+#  本体检索计划执行（Step 6/7 激活）
+# ====================================================================== #
+def _execute_search_plan(
+    concept_names: list[str],
+    search_plan: dict | None,
+    question: str,
+    concept_ids: list[str] | None = None,
+    expansion: dict | None = None,
+) -> tuple[str, list[dict]]:
+    """执行本体检索计划中的确定性策略，返回 (上下文文本, 预检索文档列表)。
+
+    真实执行（而非仅提示）：
+      - 本体展开：沿概念 N 跳收集关联文档（ontology_traversal.expand_concepts）
+      - 向量/全文：用增强查询预检索（search_documents 内部四路并行）
+    让"本体引导的检索计划"从装饰性提示变为驱动初始召回。
+    """
+    context_parts: list[str] = []
+    prefetched: list[dict] = []
+
+    # 1) 本体展开 → 关联文档
+    if ontology_traversal:
+        try:
+            if expansion is None:
+                expansion = ontology_traversal.expand_concepts(concept_names, depth=2)
+            bound = expansion.get("bound_documents", [])
+            expanded = expansion.get("expanded_concepts", [])
+            doc_titles = [b.get("title") or b.get("doc_id", "") for b in bound][:12]
+            doc_titles = [t for t in doc_titles if t]
+            if bound or expanded:
+                context_parts.append(
+                    f"本体展开命中 {len(expanded)} 个相关概念，"
+                    f"关联 {len(bound)} 篇文档：{', '.join(doc_titles)}。"
+                )
+                for b in bound:
+                    did = b.get("doc_id", "")
+                    if did:
+                        prefetched.append({
+                            "doc_id": did,
+                            "title": b.get("title", ""),
+                            "excerpt": "",
+                            "sources": ["ontology"],
+                        })
+        except Exception:
+            pass
+
+    # 2) 增强查询 → 向量/全文预检索
+    if concept_names:
+        try:
+            eq = ontology_traversal.build_enhanced_query(question, concept_names, depth=1)
+        except Exception:
+            eq = question
+        try:
+            res = wr.search_documents(
+                eq, topk=5, use_rerank=False,
+                concept_ids=concept_ids, code_route=bool(concept_ids),
+            )
+            for r in res.get("results", []):
+                did = r.get("doc_id", "")
+                if did and not any(p.get("doc_id") == did for p in prefetched):
+                    prefetched.append({
+                        "doc_id": did,
+                        "title": r.get("title", ""),
+                        "excerpt": r.get("excerpt", ""),
+                        "sources": r.get("sources", []),
+                    })
+            routes = res.get("routes", {})
+            context_parts.append(
+                f"按概念增强查询预检索命中（向量 {routes.get('vector', 0)} / "
+                f"全文 {routes.get('fts', 0)} / 图 {routes.get('graph', 0)} / "
+                f"元数据 {routes.get('meta', 0)}）。"
+            )
+        except Exception:
+            pass
+
+    # 3) 跨库全文 grep（W3.7 策略2 独立化）：对全部文档 content 正则扫描，不限绑定文件
+    try:
+        import re as _re
+        _kws = [w for w in _re.split(r"[\s,，。、？?]+", question) if len(w) >= 2]
+        if _kws:
+            _pat = "|".join(_kws[:6])
+            _grep = wr.grep_documents(_pat, topk=8)
+            for g in _grep:
+                did = g.get("doc_id", "")
+                if did and not any(p.get("doc_id") == did for p in prefetched):
+                    prefetched.append({**g, "sources": ["grep"]})
+            if _grep:
+                context_parts.append(
+                    f"跨库 grep 命中 {len(_grep)} 篇文档（关键词: {_pat}）。"
+                )
+    except Exception:
+        pass
+
+    return "\n".join(context_parts), prefetched
+
+
+def _build_reasoning_path(expansion: dict | None, concept_ids: list[str] | None = None) -> dict:
+    """基于本体展开的真实关系路径，供 Step 10 输出「推理路径」（W2.2）。
+
+    不再是步骤摘要，而是沿本体关系边的真实链路：
+      概念A -[关系类型]-> 概念B → 命中文档
+
+    Args:
+        expansion: ontology_traversal.expand_concepts 的返回
+        concept_ids: 定位到的概念 ID 列表（用于高亮根概念）
+
+    Returns:
+        {
+            "edges": [{"from": str, "to": str, "type": str, "is_root": bool}, ...],
+            "evidence_docs": [{"doc_id": str, "title": str}, ...]
+        }
+    """
+    if not expansion:
+        return {"edges": [], "evidence_docs": []}
+
+    edges: list[dict] = []
+    root_ids = set(concept_ids or [])
+    for r in expansion.get("relations", []):
+        s = r.get("source_name") or r.get("source") or ""
+        t = r.get("target_name") or r.get("target") or ""
+        rt = r.get("relation_type") or r.get("type") or "related"
+        if not s or not t:
+            continue
+        sid = r.get("source", "")
+        edges.append({
+            "from": s,
+            "to": t,
+            "type": rt,
+            "is_root": sid in root_ids,
+        })
+
+    bound = expansion.get("bound_documents", [])
+    seen: set[str] = set()
+    evidence_docs: list[dict] = []
+    for b in bound:
+        did = b.get("doc_id", "")
+        if did and did not in seen:
+            seen.add(did)
+            evidence_docs.append({"doc_id": did, "title": b.get("title", "")})
+
+    return {"edges": edges, "evidence_docs": evidence_docs[:12]}
+
+
+# ====================================================================== #
+#  结构化闭环评估（Step 9）
+# ====================================================================== #
+EVAL_SYSTEM_PROMPT = """\
+你是一个检索质量评估员。给定用户问题、已检索到的证据摘要、定位到的概念与约束条件，判断当前证据是否足以回答。
+
+输出 JSON：
+{
+  "decision": "answer" | "continue" | "verify",
+  "reason": "简要理由",
+  "missing_info": "若 continue，指出缺失的关键信息",
+  "next_search": "若 continue，给出下一步应检索的关键词/概念",
+  "verify_target": "若 verify，明确指出需要验证的矛盾点或断言（如『文档A说X，文档B说Y，需确认哪个正确』）"
+}
+
+决策原则：
+- 证据覆盖了问题的核心概念和关键关系 → answer
+- 关键概念/环节缺失 → continue
+- 证据中出现相互矛盾的说法，需要定向核查才能采信 → verify（必须给出 verify_target）
+- 已经过多轮仍无关键进展 → answer（让 Agent 基于已有信息作答）
+"""
+
+
+def evaluate_retrieval(
+    question: str,
+    retrieved_docs: list[dict],
+    concept_info: dict | None,
+    constraints: dict | None = None,
+) -> dict | None:
+    """结构化闭环评估（AI推理引擎.md Step 9）。
+
+    返回 {decision, reason, missing_info, next_search, verify_target} 或 None（解析失败/异常）。
+    decision 可能取值：answer / continue / verify。
+    """
+    if not retrieved_docs:
+        return None
+
+    ev: list[str] = []
+    for d in retrieved_docs[:12]:
+        title = d.get("title") or d.get("doc_id", "")
+        ex = (d.get("excerpt") or "")[:200]
+        ev.append(f"- {title}: {ex}")
+    evidence = "\n".join(ev) if ev else "(无)"
+
+    located: list[str] = []
+    if concept_info:
+        located = [c["name"] for c in concept_info.get("located_concepts", [])]
+
+    constraint_text = ""
+    if constraints:
+        items = [f"{k}: {v}" for k, v in constraints.items() if v]
+        if items:
+            constraint_text = "\n".join(f"- {it}" for it in items)
+
+    messages = [
+        {"role": "system", "content": EVAL_SYSTEM_PROMPT},
+        {"role": "user", "content": (
+            f"## 用户问题\n{question}\n\n"
+            f"## 定位概念\n{', '.join(located) if located else '(未定位)'}\n\n"
+            f"## 约束条件\n{constraint_text if constraint_text else '(无)'}\n\n"
+            f"## 已检索证据（前 {len(ev)} 条）\n{evidence}"
+        )},
+    ]
+    try:
+        data = _call_llm_safe(messages, temperature=0.2)
+        content, _ = _parse_llm_response(data)
+        result = _extract_json(_clean_answer(content))
+        if isinstance(result, dict) and result.get("decision") in ("answer", "continue", "verify"):
+            return result
+        return None
+    except Exception:
+        return None
+
+
+# ====================================================================== #
+#  文档级概念标注（供 pipeline 入库调用，替代纯关键词匹配）
+# ====================================================================== #
+ANNOTATE_SYSTEM_PROMPT = """\
+你是一个知识库标注员。给定一篇文档的标题与摘要，以及本体概念列表，
+请从中选出与本文档内容相关的概念（可多选）。
+
+规则：
+- 只能从给定的概念列表中选择，不要编造
+- 选中的概念应是文档真正讨论或涉及的核心概念
+- 若文档与列表中的概念都不相关，返回空数组
+
+输出 JSON：
+{
+  "concept_names": ["概念A", "概念B"]
+}
+"""
+
+
+def annotate_document_concepts(title: str, content: str,
+                               concept_list: list[dict]) -> list[str]:
+    """LLM 多选题式标注文档所属概念，返回概念名列表。
+
+    Args:
+        title: 文档标题
+        content: 文档内容（或摘要）
+        concept_list: ontology.list_concepts() 返回的概念列表
+
+    返回：选中的概念名列表（空列表表示无匹配）。
+    """
+    if not concept_list:
+        return []
+    lines = []
+    for c in concept_list:
+        lines.append(f"- {c['name']} [{c.get('type', '')}] | {c.get('description', '')[:80]}")
+    concept_text = "\n".join(lines)
+
+    messages = [
+        {"role": "system", "content": ANNOTATE_SYSTEM_PROMPT},
+        {"role": "user", "content": (
+            f"## 概念列表\n{concept_text}\n\n"
+            f"## 文档标题\n{title}\n\n"
+            f"## 文档摘要\n{content[:800]}"
+        )},
+    ]
+    try:
+        data = _call_llm_safe(messages, temperature=0.2)
+        ctype, _ = _parse_llm_response(data)
+        result = _extract_json(_clean_answer(ctype))
+        if result and isinstance(result.get("concept_names"), list):
+            return [str(n) for n in result["concept_names"]]
+    except Exception:
+        pass
+    return []
 
 
 def run_agent(question: str, max_iterations: int = 8,
@@ -553,7 +859,9 @@ def run_agent(question: str, max_iterations: int = 8,
 
     返回 {"answer": str, "trace": [...], "iterations": int, "elapsed": float,
            "concept_location": dict | None, "ontology_path": list | None,
-           "confidence": float | None, "path_type": "fast" | "deep"}
+           "confidence": float | None, "path_type": "fast" | "deep",
+           "uncertainties": list[str], "clarification_needed": bool,
+           "clarification_candidates": list[str]}
     """
     messages = [
         {"role": "system", "content": AGENT_SYSTEM_PROMPT},
@@ -574,6 +882,14 @@ def run_agent(question: str, max_iterations: int = 8,
     concept_info: dict | None = None
     search_plan: dict | None = None
     concept_names: list[str] = []
+    concept_ids: list[str] = []
+    prefetched_docs: list[dict] = []
+    ontology_context: str = ""
+    # W2.5 约束条件 / W2.4 低置信反问 / W2.2 真实推理路径
+    constraints: dict = {}
+    clarification_needed: bool = False
+    clarification_candidates: list[str] = []
+    reasoning_edges: list[dict] = []
     if use_ontology and concept_locator:
         try:
             concept_info = concept_locator.locate(question)
@@ -582,12 +898,53 @@ def run_agent(question: str, max_iterations: int = 8,
             concept_names = [c["name"] for c in located if c.get("confidence", 0) > 0.5]
             concept_names += [c["name"] for c in implicit if c.get("confidence", 0) > 0.4]
 
+            # W2.4：低置信度反问——所有命中概念置信度均偏低时提示澄清（不阻塞，带默认行为）
+            located_conf = [c.get("confidence", 0) for c in located]
+            if (not located_conf) or (all(c < 0.4 for c in located_conf) and located_conf):
+                clarification_needed = True
+                cands = concept_info.get("candidates") or []
+                clarification_candidates = [c.get("name") for c in cands if c.get("name")][:6]
+                if not clarification_candidates and ontology:
+                    try:
+                        _all = ontology.list_concepts()[:8]
+                        clarification_candidates = [c["name"] for c in _all if c.get("name")]
+                    except Exception:
+                        pass
+
+            # W2.5：约束条件（频率/触发点）参与后续检索与评估
+            constraints = concept_info.get("constraints") or {}
+
+            # 将概念名解析为概念 ID（供 Re-Rank 概念距离因子 + 检索计划匹配）
+            if concept_names and ontology:
+                try:
+                    _name_to_id = {c["name"]: c["id"] for c in ontology.list_concepts()}
+                    concept_ids = [_name_to_id[n] for n in concept_names if n in _name_to_id]
+                except Exception:
+                    concept_ids = []
+
             if concept_names and ontology_traversal:
                 # 生成检索计划
                 try:
                     search_plan = ontology_traversal.generate_search_plan(concept_names, depth=2)
                 except Exception:
                     search_plan = None
+
+                # W2.2：本体展开（同时用于真实推理路径 + 预检索，避免重复计算）
+                expansion = None
+                try:
+                    expansion = ontology_traversal.expand_concepts(concept_names, depth=2)
+                    reasoning_edges = _build_reasoning_path(expansion, concept_ids)
+                except Exception:
+                    expansion = None
+
+                # 激活检索计划：把确定性策略（本体展开 + 图 + 文件 + 调用链）真正执行并预检索
+                try:
+                    ontology_context, prefetched_docs = _execute_search_plan(
+                        concept_names, search_plan, question,
+                        concept_ids=concept_ids, expansion=expansion,
+                    )
+                except Exception:
+                    ontology_context, prefetched_docs = "", []
 
                 # 概念提示注入
                 concept_hint = []
@@ -605,6 +962,11 @@ def run_agent(question: str, max_iterations: int = 8,
                         f"检索范围: {scope.get('bound_documents', 0)} 文档, "
                         f"{scope.get('bound_files', 0)} 文件"
                     )
+                # W2.5：约束条件（如「偶尔」「登录后」）注入检索提示
+                if constraints:
+                    cstr = "; ".join(f"{k}={v}" for k, v in constraints.items() if v)
+                    if cstr:
+                        concept_hint.append(f"约束条件: {cstr}（检索时优先考虑符合该场景的文档）")
                 if concept_hint:
                     question = f"{question}\n\n[系统提示] {'; '.join(concept_hint)}"
         except Exception:
@@ -616,12 +978,27 @@ def run_agent(question: str, max_iterations: int = 8,
 
     messages.append({"role": "user", "content": question})
 
+    # 把本体检索计划预检索到的文档并入候选池（供后续 Re-Rank 与评估使用）
+    all_retrieved_docs: list[dict] = []
+    prev_retrieved_ids: set[str] = set()
+    if ontology_context:
+        messages.append({
+            "role": "user",
+            "content": f"[本体检索计划预检索]\n{ontology_context}\n"
+                       f"以上是根据本体展开已定位的相关文档与候选证据，请优先参考，"
+                       f"并判断是否需要补充检索。",
+        })
+    for d in prefetched_docs:
+        did = d.get("doc_id", "")
+        if did and did not in prev_retrieved_ids:
+            prev_retrieved_ids.add(did)
+            all_retrieved_docs.append(d)
+
     trace: list[dict] = []
     start_time = time.time()
-    all_retrieved_docs: list[dict] = []
     search_rounds = 0
     last_new_docs = 0
-    prev_retrieved_ids: set[str] = set()
+    force_answer = False
 
     # P2-1: 硬性约束
     TIME_LIMIT = 45     # 总时间上限 (秒)
@@ -751,6 +1128,48 @@ def run_agent(question: str, max_iterations: int = 8,
                     "content": f"[系统] 已检索文档({len(prev_retrieved_ids)}篇，最新5篇): "
                                f"{'; '.join(retrieved_titles)}。补充检索时避免重复查询已覆盖的内容。",
                 })
+
+            # ── Step 9: 结构化闭环评估（仅 deep 路径，避免快速通道额外开销）──
+            if (not is_simple) and is_search_call and all_retrieved_docs and not force_answer:
+                try:
+                    eval_result = evaluate_retrieval(
+                        question, all_retrieved_docs, concept_info, constraints=constraints
+                    )
+                except Exception:
+                    eval_result = None
+                if eval_result:
+                    trace.append({
+                        "iteration": i + 1,
+                        "tool": "_evaluate",
+                        "args": {},
+                        "result": eval_result,
+                        "duration": 0,
+                    })
+                    decision = eval_result.get("decision", "")
+                    if decision == "answer":
+                        force_answer = True
+                        messages.append({
+                            "role": "user",
+                            "content": "[系统·评估] 现有证据已足够回答，请直接生成最终回答，并附推理路径与引用来源。",
+                        })
+                    elif decision == "verify":
+                        # W2.1：矛盾验证分支——定向核查 verify_target 后再作答
+                        vt = eval_result.get("verify_target") or eval_result.get("missing_info") or ""
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                f"[系统·评估] 检测到可能矛盾，需验证：{vt}。"
+                                f"请针对该点做定向检索（可在概念绑定文件中 grep 关键词）进行核实，"
+                                f"再给出最终回答。"
+                            ),
+                        })
+                    elif decision == "continue" and search_rounds < 3:
+                        nxt = eval_result.get("next_search") or eval_result.get("missing_info") or ""
+                        messages.append({
+                            "role": "user",
+                            "content": f"[系统·评估] 证据尚不充分，建议补充检索：{nxt}。请据此继续检索。",
+                        })
+
             last_new_docs = new_docs_this_round
         else:
             answer = _clean_answer(content)
@@ -759,7 +1178,7 @@ def run_agent(question: str, max_iterations: int = 8,
             if use_rerank and reranker and all_retrieved_docs:
                 try:
                     reranked = reranker.rerank(all_retrieved_docs, question,
-                                               target_concept_ids=concept_names, topk=5)
+                                               target_concept_ids=concept_ids, topk=5)
                     trace.append({
                         "iteration": i + 1,
                         "tool": "_rerank",
@@ -785,6 +1204,22 @@ def run_agent(question: str, max_iterations: int = 8,
                         "step": "检索计划",
                         "strategies": [s["strategy"] for s in search_plan.get("plan", [])],
                     })
+                # W2.2：真实推理路径——沿本体关系边的链路，而非步骤摘要
+                if reasoning_edges:
+                    ontology_path.append({
+                        "step": "推理路径",
+                        "edges": [
+                            {
+                                "relation": f"{e['from']} -[{e['type']}]-> {e['to']}",
+                                "is_root": e.get("is_root", False),
+                            }
+                            for e in reasoning_edges["edges"]
+                        ],
+                        "evidence_docs": [
+                            d.get("title") or d.get("doc_id", "")
+                            for d in reasoning_edges["evidence_docs"]
+                        ],
+                    })
                 ontology_path.append({
                     "step": "检索执行",
                     "rounds": search_rounds,
@@ -793,6 +1228,9 @@ def run_agent(question: str, max_iterations: int = 8,
                 # 简单置信度：概念匹配数 / 结果覆盖
                 if concept_info.get("located_concepts"):
                     confidence = min(0.9, 0.5 + 0.1 * len(concept_info["located_concepts"]))
+
+            # W2.3：从答案中分离结构化「不确定点」
+            answer, uncertainties = _split_uncertainties(answer)
 
             # 记录对话到 Memory Graph
             doc_ids: list[str] = []
@@ -820,6 +1258,9 @@ def run_agent(question: str, max_iterations: int = 8,
                 "ontology_path": ontology_path,
                 "confidence": confidence,
                 "path_type": path_type,
+                "uncertainties": uncertainties,
+                "clarification_needed": clarification_needed,
+                "clarification_candidates": clarification_candidates,
             }
 
     return {
@@ -831,4 +1272,7 @@ def run_agent(question: str, max_iterations: int = 8,
         "ontology_path": None,
         "confidence": None,
         "path_type": path_type,
+        "uncertainties": [],
+        "clarification_needed": clarification_needed,
+        "clarification_candidates": clarification_candidates,
     }

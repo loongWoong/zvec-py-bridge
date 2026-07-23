@@ -92,6 +92,9 @@ class Candidate:
             "concept_score": round(self.concept_distance_score, 4),
             "structural_score": round(self.structural_score, 4),
             "freshness_score": round(self.freshness_score, 4),
+            "concept_ids": self.concept_ids,
+            "function_name": self.function_name,
+            "updated_at": self.updated_at,
             "sources": self.sources,
             "file_path": self.file_path,
         }

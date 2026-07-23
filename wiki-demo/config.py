@@ -47,7 +47,7 @@ VECTOR_FIELD = "embedding"
 LLM_URL = os.environ.get("LLM_URL", "http://127.0.0.1:8000")
 LLM_API = os.environ.get("LLM_API", "openai")          # "openai" | "ollama"
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "sk-123")
-LLM_MODEL = os.environ.get("LLM_MODEL", "hy3")
+LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
 LLM_TIMEOUT = _env_int("LLM_TIMEOUT", 120)             # LLM 请求超时（秒）
 LLM_HEALTH_TIMEOUT = _env_int("LLM_HEALTH_TIMEOUT", 5)  # LLM 健康检查超时（秒）
 
