@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Wiki · 图标映射规范 ICON-MAP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#15171c; --ink-soft:#41454f; --ink-mute:#767c88;
+    --paper:#f2f4f6; --paper-2:#e9ecf0; --card:#ffffff;
+    --line:#dfe3e8; --line-soft:#eceef1;
+    --teal:#0b6e5b; --teal-deep:#084c3f; --amber:#c2741a;
+    /* 复用图标语义色 */
+    --c-doc:#4f93d6; --c-ent:#e0a93b; --c-tag:#9b6bb0; --c-top:#4fa777;
+    --c-raw:#9c6b53; --c-arc:#c0473f; --c-con:#e8862e; --c-ver:#7c7a23;
+    --c-ok:#1f9d57; --c-pend:#e0991a; --c-off:#9aa0a6;
+    --r:14px;
+    --disp:'Bricolage Grotesque',serif;
+    --body:'Manrope',system-ui,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; color:var(--ink); font-family:var(--body);
+    background:
+      radial-gradient(900px 480px at 88% -8%, rgba(11,110,91,.10), transparent 60%),
+      radial-gradient(700px 420px at -6% 4%, rgba(194,116,26,.07), transparent 55%),
+      linear-gradient(180deg,var(--paper),var(--paper-2));
+    background-attachment:fixed;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  body::before{ /* 细网格 ambient，非 aurora */
+    content:""; position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.5;
+    background-image:
+      linear-gradient(to right, rgba(21,23,28,.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(21,23,28,.035) 1px, transparent 1px);
+    background-size:46px 46px;
+    -webkit-mask-image:radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
+            mask-image:radial-gradient(120% 90% at 50% 0%, #000 35%, transparent 92%);
+  }
+  .wrap{position:relative; z-index:1; max-width:1240px; margin:0 auto; padding:0 26px 120px}
+
+  /* ---------- 刊头 ---------- */
+  header.mast{
+    display:grid; grid-template-columns:1.5fr .9fr; gap:34px; align-items:end;
+    padding:54px 0 30px; border-bottom:2px solid var(--ink);
+  }
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.32em; text-transform:uppercase;
+    color:var(--teal-deep); display:flex; align-items:center; gap:10px; margin-bottom:14px}
+  .kicker .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 4px rgba(11,110,91,.14)}
+  h1.title{font-family:var(--disp); font-weight:800; line-height:.92; margin:0;
+    font-size:clamp(40px,7vw,86px); letter-spacing:-.02em}
+  h1.title em{font-style:italic; font-weight:400; color:var(--teal-deep)}
+  .lede{margin:16px 0 0; max-width:46ch; color:var(--ink-soft); font-size:15.5px}
+  .meta{display:grid; grid-template-columns:1fr 1fr; gap:14px 22px; align-content:end}
+  .meta .m{border-left:2px solid var(--line); padding-left:12px}
+  .meta .m b{font-family:var(--disp); font-size:30px; font-weight:800; display:block; line-height:1}
+  .meta .m span{font-family:var(--mono); font-size:11px; letter-spacing:.12em; color:var(--ink-mute); text-transform:uppercase}
+
+  /* 在线灯演示 */
+  .lamps{grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap; margin-top:4px}
+  .lamp{display:inline-flex; align-items:center; gap:7px; font-family:var(--mono); font-size:12px;
+    border:1px solid var(--line); background:rgba(255,255,255,.7); border-radius:999px; padding:6px 12px;
+    cursor:pointer; transition:.18s; user-select:none}
+  .lamp:hover{transform:translateY(-1px); border-color:var(--ink)}
+  .lamp svg{width:15px;height:15px}
+  .lamp.on{color:var(--c-ok)} .lamp.off{color:var(--c-off)}
+
+  /* ---------- 工具条 ---------- */
+  .toolbar{position:sticky; top:0; z-index:30; margin:26px -26px 0; padding:14px 26px;
+    background:rgba(242,244,246,.82); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); display:flex; gap:14px; flex-wrap:wrap; align-items:center}
+  .search{flex:1 1 280px; display:flex; align-items:center; gap:9px; background:var(--card);
+    border:1px solid var(--line); border-radius:10px; padding:9px 13px}
+  .search svg{width:17px;height:17px;color:var(--ink-mute);flex:none}
+  .search input{border:0;outline:0;background:transparent;font-family:var(--body);font-size:14px;width:100%;color:var(--ink)}
+  .chips{display:flex; gap:7px; flex-wrap:wrap}
+  .chip{font-family:var(--mono); font-size:12px; letter-spacing:.02em; border:1px solid var(--line);
+    background:var(--card); color:var(--ink-soft); border-radius:999px; padding:7px 13px; cursor:pointer; transition:.16s}
+  .chip:hover{border-color:var(--ink); color:var(--ink)}
+  .chip.active{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .chip .n{opacity:.5; margin-left:5px}
+
+  /* ---------- 章节标题 ---------- */
+  .sec{margin:64px 0 22px; display:flex; align-items:baseline; gap:18px}
+  .sec .num{font-family:var(--disp); font-weight:800; font-size:54px; line-height:.8; color:var(--teal-deep); opacity:.9}
+  .sec h2{font-family:var(--disp); font-weight:700; font-size:26px; margin:0; letter-spacing:-.01em}
+  .sec p{margin:2px 0 0; color:var(--ink-mute); font-size:13.5px; max-width:60ch}
+  .sec .head{flex:1}
+
+  /* ---------- 图标总览网格 ---------- */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(268px,1fr)); gap:16px}
+  .ic{position:relative; background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+    padding:18px 18px 16px; transition:transform .2s, box-shadow .2s, border-color .2s; overflow:hidden}
+  .ic::after{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--accent,var(--line)); transition:.2s}
+  .ic:hover{transform:translateY(-4px); box-shadow:0 16px 34px -20px rgba(21,23,28,.45); border-color:var(--ink)}
+  .ic:hover .glyph{transform:scale(1.06) rotate(-1.5deg)}
+  .ic .top{display:flex; align-items:flex-start; gap:13px}
+  .glyph{width:50px;height:50px;flex:none; display:grid;place-items:center; border-radius:12px;
+    background:var(--paper); transition:transform .25s}
+  .glyph svg{width:30px;height:30px}
+  .ic.linear .glyph{color:var(--ink)}
+  .ic .nm{font-family:var(--disp); font-weight:700; font-size:16.5px; line-height:1.1}
+  .ic .grp{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute); margin-top:3px}
+  .keyrow{margin:13px 0 0; display:flex; align-items:center; gap:8px}
+  .key{font-family:var(--mono); font-size:12px; background:var(--paper); border:1px solid var(--line-soft);
+    border-radius:7px; padding:4px 9px; color:var(--teal-deep); cursor:pointer; transition:.15s; word-break:break-all}
+  .key:hover{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .copyhint{font-family:var(--mono); font-size:10px; color:var(--ink-mute); letter-spacing:.06em}
+  .vis{margin:11px 0 0; font-size:12.5px; color:var(--ink-soft)}
+  .vis b{color:var(--ink); font-weight:600}
+  .uses{margin:12px 0 0; border-top:1px dashed var(--line); padding-top:11px; display:flex; flex-direction:column; gap:9px}
+  .use{display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:start}
+  .use .area{font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:#fff; background:var(--ac,var(--ink-mute)); border-radius:5px; padding:3px 7px; white-space:nowrap; margin-top:1px}
+  .use .ctrl{font-size:12.5px; color:var(--ink)}
+  .use .ctrl .role{display:block; color:var(--ink-mute); font-size:11.5px; margin-top:1px}
+  .use .ctrl code{font-family:var(--mono); font-size:11.5px; background:var(--paper); border-radius:4px; padding:1px 5px; color:var(--teal-deep)}
+  .note{margin:11px 0 0; font-size:11.5px; color:var(--amber); display:flex; gap:6px}
+  .note::before{content:"↳"; font-weight:700}
+
+  /* ---------- 反向视图：按区域 ---------- */
+  .region{background:var(--card); border:1px solid var(--line); border-radius:var(--r); margin-bottom:14px; overflow:hidden; transition:.2s}
+  .region.hot{border-color:var(--teal); box-shadow:0 0 0 3px rgba(11,110,91,.12)}
+  .region > summary{list-style:none; cursor:pointer; padding:16px 20px; display:flex; align-items:center; gap:14px}
+  .region > summary::-webkit-details-marker{display:none}
+  .region .rbar{width:5px; align-self:stretch; border-radius:3px; background:var(--ac,var(--ink-mute)); min-height:24px}
+  .region .rname{font-family:var(--disp); font-weight:700; font-size:18px}
+  .region .rname small{font-family:var(--mono); font-size:11px; color:var(--ink-mute); letter-spacing:.08em; margin-left:8px}
+  .region .rcount{margin-left:auto; font-family:var(--mono); font-size:12px; color:var(--ink-mute)}
+  .region .chev{transition:.2s; color:var(--ink-mute)}
+  .region[open] .chev{transform:rotate(90deg)}
+  .rbody{padding:4px 20px 20px; display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px}
+  .rline{border:1px solid var(--line-soft); border-radius:10px; padding:11px 13px; display:flex; gap:11px; align-items:flex-start}
+  .rline .g{width:30px;height:30px;flex:none;display:grid;place-items:center;border-radius:8px;background:var(--paper)}
+  .rline .g svg{width:19px;height:19px}
+  .rline.linear .g{color:var(--ink)}
+  .rline .t b{font-size:13.5px}
+  .rline .t .k{font-family:var(--mono); font-size:10.5px; color:var(--teal-deep)}
+  .rline .t .c{font-size:12px; color:var(--ink-soft); margin-top:2px}
+  .rline .t .c code{font-family:var(--mono);font-size:11px;background:var(--paper);border-radius:4px;padding:0 4px;color:var(--teal-deep)}
+
+  /* ---------- 诚实/未覆盖 ---------- */
+  .honest{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px}
+  .hcard{border:1px solid var(--line); border-radius:var(--r); padding:20px; background:rgba(255,255,255,.6)}
+  .hcard.warn{border-color:rgba(194,116,26,.4); background:rgba(194,116,26,.05)}
+  .hcard h3{font-family:var(--disp); font-size:17px; margin:0 0 10px}
+  .hcard ul{margin:0; padding-left:18px; font-size:13px; color:var(--ink-soft)}
+  .hcard li{margin:6px 0}
+  .hcard code{font-family:var(--mono); font-size:11.5px; background:var(--paper); border-radius:4px; padding:1px 5px; color:var(--teal-deep)}
+
+  /* reveal */
+  .reveal{opacity:0; transform:translateY(16px); transition:opacity .55s ease, transform .55s ease}
+  .reveal.in{opacity:1; transform:none}
+
+  /* toast */
+  #toast{position:fixed; left:50%; bottom:26px; transform:translate(-50%,140%); z-index:90;
+    background:var(--ink); color:#fff; font-family:var(--mono); font-size:12.5px; padding:11px 18px;
+    border-radius:10px; box-shadow:0 14px 30px -12px rgba(0,0,0,.5); transition:transform .3s cubic-bezier(.2,.9,.3,1.2)}
+  #toast.show{transform:translate(-50%,0)}
+  #toast b{color:#7fe3c8}
+
+  footer{margin-top:70px; border-top:2px solid var(--ink); padding-top:18px; display:flex; justify-content:space-between;
+    flex-wrap:wrap; gap:10px; font-family:var(--mono); font-size:11px; color:var(--ink-mute); letter-spacing:.06em}
+
+  @media(max-width:820px){
+    header.mast{grid-template-columns:1fr; gap:24px}
+    .honest{grid-template-columns:1fr}
+    .sec .num{font-size:40px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 刊头 ============ -->
+  <header class="mast">
+    <div>
+      <div class="kicker"><span class="dot"></span>ICON REFERENCE · FRONT-END MAPPING SPEC</div>
+      <h1 class="title">图标<br><em>映射规范</em></h1>
+      <p class="lede">将两张参考表中的 <b>27 个 SVG 图标</b>，逐一对位到 Semantic Wiki 五个界面区域的具体控件。本规范同时提供「按图标查位置」与「按区域查图标」两种视图，并以 <code style="font-family:var(--mono);font-size:12px">key</code> 作为与仓库文件一一对应的稳定主键。</p>
+    </div>
+    <div class="meta">
+      <div class="m"><b>27</b><span>icons total</span></div>
+      <div class="m"><b>2</b><span>style groups</span></div>
+      <div class="m"><b>6</b><span>ui regions</span></div>
+      <div class="m"><b>v1.0</b><span>spec revision</span></div>
+      <div class="lamps" id="lamps" title="点击切换，演示 Connected / Disconnected 图标用法">
+        <!-- 在线灯由 JS 渲染 -->
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ 工具条 ============ -->
+  <div class="toolbar">
+    <label class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.5 14.5 20 20"/></svg>
+      <input id="q" type="text" placeholder="搜索图标名 / key / 控件位置 …">
+    </label>
+    <div class="chips" id="areaChips"></div>
+    <div class="chips" id="groupChips"></div>
+  </div>
+
+  <!-- ============ A 总览 ============ -->
+  <div class="sec reveal">
+    <div class="num">01</div>
+    <div class="head">
+      <h2>按图标查位置 · Icon → UI</h2>
+      <p>每张卡片：示意字形 + 稳定 key + 视觉描述 + 该图标在前端的所有落点（区域 / 控件 / 角色）。点击 key 复制。</p>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <!-- ============ B 反向 ============ -->
+  <div class="sec reveal">
+    <div class="num">02</div>
+    <div class="head">
+      <h2>按区域查图标 · UI → Icon</h2>
+      <p>反过来，按界面区域聚合：落地某个 Tab 时，需要引入哪些图标、用在哪些控件。展开查看明细。</p>
+    </div>
+  </div>
+  <div id="regions"></div>
+
+  <!-- ============ C 诚实/未覆盖 ============ -->
+  <div class="sec reveal">
+    <div class="num">03</div>
+    <div class="head">
+      <h2>命名约定 · 未覆盖控件 · 诚实说明</h2>
+      <p>规范的可信度来自边界清晰：哪些已映射、哪些当前界面无图标、哪些是示意而非实物。</p>
+    </div>
+  </div>
+  <div class="honest reveal">
+    <div class="hcard">
+      <h3>命名与文件约定</h3>
+      <ul>
+        <li>线性操作/导航组 → 文件前缀 <code>icon_</code>（如 <code>icon_search.svg</code>）。</li>
+        <li>彩色节点类型组 → 文件前缀 <code>node_</code>（如 <code>node_entity.svg</code>）。</li>
+        <li>彩色状态组 → 文件前缀 <code>state_</code>（如 <code>state_approved.svg</code>）。</li>
+        <li>统一 <code>viewBox="0 0 24 24"</code>；线性用 <code>stroke=currentColor</code> 以便随主题换色，彩色用固定语义 fill。</li>
+        <li>两套参考表编号各自从 1 起且互相重叠，<b>禁止用裸编号引用</b>，一律用 key / 名称。</li>
+      </ul>
+    </div>
+    <div class="hcard warn">
+      <h3>当前界面无专用图标的控件</h3>
+      <ul>
+        <li>文档库：卡片右上角 <code>× 移除</code>、<code>📊 元数据</code> 按钮（现为内联小图，集内无专名）、<code>正则 grep</code> 复选框。</li>
+        <li>本体：统计徽章（概念/关系/绑定/类型）、类型/关系下拉；<b>本体图类型图例</b>（algorithm / component / concept / configuration / infrastructure / mechanism / metric / pattern / problem / process / tool）现用色点，<b>图标集未覆盖</b>。</li>
+        <li>知识图谱：布局切换（力导向/层次/环形/类型聚集）、<code>图查询</code>、<code>所有边</code> 下拉、<code>边标签/箭头</code> 开关。</li>
+        <li>分析：各 W4.x 的输入框、<code>old_ref/new_ref</code>、定时数字输入。</li>
+        <li>建议：若需图标化，优先补 <b>11 个本体类型 glyph</b>，使「本体类型」与「节点类型」两套图例在视觉语言上对齐。</li>
+      </ul>
+    </div>
+    <div class="hcard warn" style="grid-column:1/-1">
+      <h3>关于本规范的三点诚实声明</h3>
+      <ul>
+        <li><b>示意字形</b>：本页内嵌 SVG 仅为规范内的视觉锚点，可能与仓库实际 <code>/icons/*.svg</code> 笔触不同；请以仓库文件为生产真源，<b>key 与名称一一对应</b>。</li>
+        <li><b>文字 Tab</b>：当前五个主 Tab 为纯文字，线性 1–5 标注为「建议图标化位置」（Tab 前缀 / 折叠侧栏 / 移动端底栏），并非现状截图已含图标。</li>
+        <li><b>静态截图推断</b>：「使用位置」依据所给界面截图判定；若某控件后端已实现而前端未暴露，本表标为「建议落点」。</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <span>SEMANTIC WIKI · ICON-MAP SPEC</span>
+    <span>27 ICONS · 6 REGIONS · KEYED &amp; CROSS-INDEXED</span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ============ 区域 / 组 元数据 ============ */
+const AREAS = {
+  global:   {label:'全局外壳', color:'#0b6e5b'},
+  docs:     {label:'文档库',   color:'#4f93d6'},
+  ontology: {label:'本体',     color:'#9b6bb0'},
+  graph:    {label:'知识图谱', color:'#4fa777'},
+  qa:       {label:'问答',     color:'#e8862e'},
+  analysis: {label:'分析',     color:'#c2741a'},
+  nav:      {label:'导航语义', color:'#41454f'}
+};
+const GROUPS = {linear:'线性 · 操作/导航', node:'彩色 · 节点类型', state:'彩色 · 状态'};
+
+/* ============ 示意 SVG 字形（视觉锚，非生产真源） ============ */
+const L = (inner)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+const C = (inner)=>`<svg viewBox="0 0 24 24" fill="none" stroke-linejoin="round">${inner}</svg>`;
+const G = {
+  doc_lib: L(`<rect x="8" y="3.5" width="9" height="6" rx="1"/><path d="M10.5 6h4"/><path d="M3 9h5l1.6 1.6H20a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>`),
+  ontology: L(`<circle cx="12" cy="4.6" r="1.8"/><path d="M12 6.4v1.9"/><path d="M6.5 8.3h11"/><path d="M6.5 8.3v1.9"/><path d="M17.5 8.3v1.9"/><circle cx="6.5" cy="12" r="1.8"/><circle cx="17.5" cy="12" r="1.8"/><path d="M4 15.4h5M15 15.4h5"/><path d="M4 15.4v.7M9 15.4v.7M15 15.4v.7M20 15.4v.7"/><circle cx="4" cy="17.8" r="1.4"/><circle cx="9" cy="17.8" r="1.4"/><circle cx="15" cy="17.8" r="1.4"/><circle cx="20" cy="17.8" r="1.4"/>`),
+  graph: L(`<circle cx="12" cy="12" r="2.3"/><circle cx="6" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="5.5" cy="17" r="1.6"/><circle cx="17.5" cy="16.5" r="1.6"/><circle cx="19.5" cy="11.5" r="1.6"/><path d="M10.4 10.4 7.2 7.2M13.6 10.4 16.8 7.2M10.2 13.4 6.7 15.8M13.8 13.4 16.4 15.4M14.2 11.6 17.9 11.5"/>`),
+  qa: L(`<rect x="3.5" y="4.5" width="11.5" height="8" rx="2.2"/><path d="M7 12.5v3l3-3"/><path d="M8.2 8.1a1.7 1.7 0 1 1 2.4 1.6c-.5.2-.8.6-.8 1.1"/><path d="M9.6 12h.01"/><path d="M16.5 8h2.5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-2-2"/>`),
+  analysis: L(`<rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M6.4 7h.01M8.4 7h.01M10.4 7h.01"/><path d="M6 12l3-2.4 3 1.5 4-3.6"/><path d="M6 17.6v-2M9.5 17.6v-3M13 17.6v-1.4"/><path d="M16 15h3M16 17.6h3"/>`),
+  search: L(`<circle cx="10.5" cy="10.5" r="5.6"/><path d="M14.6 14.6 20 20"/>`),
+  new: L(`<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/>`),
+  import: L(`<path d="M5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/><path d="M12 4v9"/><path d="M8.5 9.5 12 13l3.5-3.5"/>`),
+  export: L(`<path d="M5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/><path d="M12 13V4"/><path d="M8.5 7.5 12 4l3.5 3.5"/>`),
+  refresh: L(`<path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/>`),
+  snapshot: L(`<rect x="3" y="7.5" width="18" height="12" rx="2"/><path d="M8.5 7.5 10 5h4l1.5 2.5"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17.5 10.4h.01"/>`),
+  rollback: L(`<path d="M5 9h8a5 5 0 0 1 0 10H8"/><path d="M8.5 5.5 5 9l3.5 3.5"/>`),
+  llm: L(`<rect x="7" y="7" width="10" height="10" rx="1.6"/><path d="M9.5 7V5M12 7V5M14.5 7V5M9.5 17v2M12 17v2M14.5 17v2M7 9.5H5M7 12H5M7 14.5H5M17 9.5h2M17 12h2M17 14.5h2"/><path d="M12.8 9.4 11 12.3h1.7l-1 2.5"/>`),
+  fixbind: L(`<path d="M9.6 14.6 8 16.2a2.3 2.3 0 0 1-3.3-3.3l2-2a2.3 2.3 0 0 1 3.3 0"/><path d="M11 11l1.6-1.6a2.3 2.3 0 0 1 3.3 3.3l-1 1"/><path d="M14.4 13.6 19 18.2"/><path d="M17.2 16.4 19 18.2l1.6-1.6-1-1 .5-1.6-1.6-.5z"/>`),
+  codestruct: L(`<path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/><circle cx="16.6" cy="16.6" r="3"/><path d="M18.8 18.8 21 21"/>`),
+  /* 彩色节点 */
+  n_doc: C(`<path d="M7 3h7l4 4v14H7z" fill="#4f93d6" stroke="#15171c" stroke-width="1.4"/><path d="M14 3v4h4" fill="#bcd6ef" stroke="#15171c" stroke-width="1.4"/><path d="M9.5 11h7M9.5 14h7M9.5 17h4" stroke="#15171c" stroke-width="1.4" stroke-linecap="round"/>`),
+  n_ent: C(`<path d="M12 3 20 7.5v9L12 21 4 16.5v-9z" fill="#e0a93b" stroke="#15171c" stroke-width="1.4"/><path d="M12 12 20 7.5M12 12 4 7.5M12 12v9" stroke="#15171c" stroke-width="1.4"/>`),
+  n_tag: C(`<path d="M13 3h7a1 1 0 0 1 1 1v7l-9 9-8-8 9-9z" fill="#9b6bb0" stroke="#15171c" stroke-width="1.4"/><circle cx="17" cy="7" r="1.5" fill="#fff" stroke="#15171c" stroke-width="1.2"/>`),
+  n_top: C(`<path d="M6 3h12v18l-6-4-6 4z" fill="#4fa777" stroke="#15171c" stroke-width="1.4"/>`),
+  n_raw: C(`<rect x="4" y="5" width="16" height="14" rx="2" fill="#9c6b53" stroke="#15171c" stroke-width="1.4"/><path d="M10 9.5 7.5 12 10 14.5M14 9.5 16.5 12 14 14.5" stroke="#15171c" stroke-width="1.5" stroke-linecap="round" fill="none"/>`),
+  n_arc: C(`<rect x="3.5" y="5" width="17" height="4" rx="1" fill="#c0473f" stroke="#15171c" stroke-width="1.4"/><path d="M5 9h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#c0473f" stroke="#15171c" stroke-width="1.4"/><rect x="10" y="12" width="4" height="2" rx="1" fill="#fff" stroke="#15171c" stroke-width="1.2"/>`),
+  n_con: C(`<rect x="3.5" y="5" width="17" height="10" rx="4.5" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><path d="M8 14.5v3.6l4-3.6" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><circle cx="9" cy="10" r="1" fill="#15171c"/><circle cx="12" cy="10" r="1" fill="#15171c"/><circle cx="15" cy="10" r="1" fill="#15171c"/>`),
+  n_ver: C(`<path d="M5 8a7 7 0 1 1-1.6 6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M5 4.4V8H8.6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 9v3.4l2.5 1.5" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/>`),
+  /* 状态 */
+  s_ok: C(`<path d="M12 3l1.6 1.4 2.1-.3.9 1.9 1.9.9-.3 2.1L21 12l-1.4 1.6.3 2.1-1.9.9-.9 1.9-2.1-.3L12 21l-1.6-1.4-2.1.3-.9-1.9-1.9-.9.3-2.1L3 12l1.4-1.6-.3-2.1 1.9-.9.9-1.9 2.1.3z" stroke="#1f9d57" stroke-width="1.6" fill="none"/><path d="M8.5 12.2 11 14.7 15.5 9.8" stroke="#1f9d57" stroke-width="1.9" stroke-linecap="round" fill="none"/>`),
+  s_pend: C(`<circle cx="12" cy="12" r="8" stroke="#e0991a" stroke-width="1.8" fill="none"/><path d="M12 7.5V12l3 2" stroke="#e0991a" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M12 4.4v1.4M12 18.2v1.4M4.4 12H5.8M18.2 12h1.4" stroke="#e0991a" stroke-width="1.4" stroke-linecap="round" fill="none"/>`),
+  s_on: C(`<path d="M5 9a10 10 0 0 1 14 0" stroke="#1f9d57" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="#1f9d57" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="#1f9d57"/>`),
+  s_off: C(`<path d="M5 9a10 10 0 0 1 14 0" stroke="#9aa0a6" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="#9aa0a6" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="#9aa0a6"/><path d="M4 4 20 20" stroke="#9aa0a6" stroke-width="1.8" stroke-linecap="round" fill="none"/>`)
+};
+
+/* ============ 图标数据：key / 名 / 组 / 视觉 / 落点 / 备注 ============ */
+const ICONS = [
+  // ---- 线性：导航 1-5 ----
+  {k:'icon_document_library', n:'Document Library', g:'linear', glyph:'doc_lib', accent:AREAS.docs.color,
+   vis:'描边文件夹，内含两页文档',
+   uses:[{a:'docs', c:'顶部 Tab「文档库」', r:'导航语义图标；当前为文字 Tab，建议作 Tab 前缀 / 折叠侧栏 / 移动底栏'}]},
+  {k:'icon_ontology', n:'Ontology', g:'linear', glyph:'ontology', accent:AREAS.ontology.color,
+   vis:'三层树状层级（1→2→4 节点）',
+   uses:[{a:'ontology', c:'顶部 Tab「本体」', r:'导航语义图标（建议图标化）'},
+         {a:'ontology', c:'工具栏「+ 新建概念」', r:'备选前缀，强调“在本体上新建”'}]},
+  {k:'icon_knowledge_graph', n:'Knowledge Graph', g:'linear', glyph:'graph', accent:AREAS.graph.color,
+   vis:'中心节点向 5 个邻居辐射',
+   uses:[{a:'graph', c:'顶部 Tab「知识图谱」', r:'导航语义图标（建议图标化）'},
+         {a:'graph', c:'「图查询 ▸」/ 布局切换组', r:'备选组标识'}]},
+  {k:'icon_qa', n:'Q&A', g:'linear', glyph:'qa', accent:AREAS.qa.color,
+   vis:'带问号的主气泡 + 次气泡',
+   uses:[{a:'qa', c:'顶部 Tab「问答」', r:'导航语义图标（建议图标化）'},
+         {a:'qa', c:'「提问」按钮 / 推荐问题胶囊', r:'动作前缀，标识“向 Wiki Agent 提问”'}]},
+  {k:'icon_analysis', n:'Analysis', g:'linear', glyph:'analysis', accent:AREAS.analysis.color,
+   vis:'面板：折线 + 柱状 + 文本行',
+   uses:[{a:'analysis', c:'顶部 Tab「分析」', r:'导航语义图标（建议图标化）'},
+         {a:'analysis', c:'W4.3「分析最近查询」/ 各卡「查看报告」', r:'动作图标'},
+         {a:'docs', c:'「📊 元数据」按钮', r:'风格参考（集内无专名，可复用此面板字形）'}]},
+  // ---- 线性：通用操作 6-15 ----
+  {k:'icon_search', n:'Search', g:'linear', glyph:'search', accent:'#41454f',
+   vis:'放大镜',
+   uses:[{a:'docs', c:'四路融合搜索框 + 「搜索」按钮', r:'主检索入口（向量+全文+图+元数据）'},
+         {a:'graph', c:'搜索框 + 「搜索」按钮', r:'图谱内检索'},
+         {a:'docs', c:'「正则 grep」复选框', r:'文本检索变体'}]},
+  {k:'icon_new', n:'New', g:'linear', glyph:'new', accent:'#41454f',
+   vis:'折角文档 + 加号',
+   uses:[{a:'docs', c:'「+ 编译文档」按钮', r:'新建/编译一条文档入库'},
+         {a:'ontology', c:'「+ 新建概念」按钮', r:'新建本体概念（与 Ontology 前缀二选一）'}]},
+  {k:'icon_import', n:'Import', g:'linear', glyph:'import', accent:'#41454f',
+   vis:'向下箭头入托盘',
+   uses:[{a:'ontology', c:'工具栏「导入」', r:'导入本体 YAML/快照'},
+         {a:'analysis', c:'W4.1「执行增量索引」', r:'备选：变更文件重新入库语义'}]},
+  {k:'icon_export', n:'Export', g:'linear', glyph:'export', accent:'#41454f',
+   vis:'向上箭头出托盘',
+   uses:[{a:'ontology', c:'工具栏「导出」', r:'导出本体为 YAML'}]},
+  {k:'icon_refresh', n:'Refresh', g:'linear', glyph:'refresh', accent:'#41454f',
+   vis:'双向循环箭头',
+   uses:[{a:'ontology', c:'工具栏「刷新」', r:'重载本体视图'},
+         {a:'analysis', c:'W4.2 定期维护 卡片 / 「立即运行维护」', r:'周期循环语义'},
+         {a:'analysis', c:'W4.1「执行增量索引」', r:'备选：重跑索引语义'}]},
+  {k:'icon_snapshot', n:'Snapshot', g:'linear', glyph:'snapshot', accent:'#41454f',
+   vis:'相机',
+   uses:[{a:'ontology', c:'工具栏「快照」', r:'对本体当前状态拍照存档'}]},
+  {k:'icon_rollback', n:'Rollback', g:'linear', glyph:'rollback', accent:'#41454f',
+   vis:'回退弯箭头',
+   uses:[{a:'ontology', c:'工具栏「回滚」', r:'从历史快照回滚本体'}]},
+  {k:'icon_llm_build', n:'LLM Build', g:'linear', glyph:'llm', accent:'#41454f',
+   vis:'芯片 + 闪电',
+   uses:[{a:'ontology', c:'工具栏「LLM 构建」', r:'由 LLM 从文档抽取概念/关系'},
+         {a:'analysis', c:'W4.2 维护（LLM 提议新概念）', r:'备选语义'}]},
+  {k:'icon_fix_binding', n:'Fix Binding', g:'linear', glyph:'fixbind', accent:'#41454f',
+   vis:'链条 + 扳手',
+   uses:[{a:'ontology', c:'工具栏「修复绑定」', r:'修复文档/实体↔概念的绑定关系'}]},
+  {k:'icon_code_structure_search', n:'Code Structure Search', g:'linear', glyph:'codestruct', accent:'#41454f',
+   vis:'</> + 放大镜',
+   uses:[{a:'docs', c:'「⌘ 代码结构检索」链接', r:'按 AST/符号结构检索'},
+         {a:'graph', c:'「⌘ 代码结构检索」链接', r:'同上'},
+         {a:'docs', c:'「代码检索」复选框', r:'代码维度检索开关'}]},
+
+  // ---- 彩色：节点类型 1-8 ----
+  {k:'node_document', n:'Document', g:'node', glyph:'n_doc', accent:'#4f93d6',
+   vis:'蓝色折角文档',
+   uses:[{a:'graph', c:'节点渲染 + 底部图例 + 过滤复选框「文档」', r:'document 类型节点'},
+         {a:'docs', c:'文档类卡片角标', r:'标识该资产为文档'},
+         {a:'qa', c:'「热门文档」列表前缀', r:'被问得最多的文档'}]},
+  {k:'node_entity', n:'Entity', g:'node', glyph:'n_ent', accent:'#e0a93b',
+   vis:'黄色立方体',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「实体」', r:'entity 类型节点'}]},
+  {k:'node_tag', n:'Tag', g:'node', glyph:'n_tag', accent:'#9b6bb0',
+   vis:'紫色吊牌',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「标签」', r:'tag 类型节点'},
+         {a:'docs', c:'卡片标签区（关键词标签）', r:'区别于“本体概念绑定”，二者勿混'}]},
+  {k:'node_topic', n:'Topic', g:'node', glyph:'n_top', accent:'#4fa777',
+   vis:'绿色书签',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「主题」', r:'topic 类型节点'}]},
+  {k:'node_raw', n:'Raw', g:'node', glyph:'n_raw', accent:'#9c6b53',
+   vis:'棕色代码块 </>',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「原始资料」', r:'raw 类型节点'}]},
+  {k:'node_archive', n:'Archive', g:'node', glyph:'n_arc', accent:'#c0473f',
+   vis:'红色归档盒',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「归档」', r:'archive 类型节点'}]},
+  {k:'node_conversation', n:'Conversation', g:'node', glyph:'n_con', accent:'#e8862e',
+   vis:'橙色对话气泡',
+   uses:[{a:'graph', c:'节点渲染 + 图例 + 过滤「对话」', r:'conversation 类型节点'}]},
+  {k:'node_version', n:'Version', g:'node', glyph:'n_ver', accent:'#7c7a23',
+   vis:'橄榄绿回退环 + 钟针',
+   uses:[{a:'graph', c:'底部图例「version」', r:'版本节点（图例有，过滤未单列勾选）'},
+         {a:'analysis', c:'W4.4「本体版本管理」卡片标识', r:'快照/回滚的版本维度'},
+         {a:'analysis', c:'W4.1「Git 增量索引」卡片标识', r:'commit / 版本维度'}]},
+
+  // ---- 彩色：状态 9-12 ----
+  {k:'state_approved', n:'Approved', g:'state', glyph:'s_ok', accent:'#1f9d57',
+   vis:'绿色花边徽章 + 对勾',
+   uses:[{a:'ontology', c:'左栏概念列表 approved 徽章', r:'概念已审核通过'},
+         {a:'ontology', c:'「待审核」通过后的状态', r:'proposed → approved'}]},
+  {k:'state_pending_review', n:'Pending Review', g:'state', glyph:'s_pend', accent:'#e0991a',
+   vis:'橙色时钟',
+   uses:[{a:'ontology', c:'工具栏「待审核」按钮', r:'进入待审核队列'},
+         {a:'ontology', c:'左栏 proposed 项徽章', r:'LLM 提议、待人工审核'}]},
+  {k:'state_connected', n:'Connected (Online)', g:'state', glyph:'s_on', accent:'#1f9d57',
+   vis:'绿色满格信号',
+   uses:[{a:'global', c:'右上 SurrealDB / zvec / LLM 在线灯', r:'组件在线（见刊头可点击演示）'},
+         {a:'analysis', c:'W4.2 定时“运行中”状态', r:'维护任务活跃'}]},
+  {k:'state_disconnected', n:'Disconnected (Offline)', g:'state', glyph:'s_off', accent:'#9aa0a6',
+   vis:'灰色信号 + 斜线',
+   uses:[{a:'global', c:'右上组件离线灯', r:'组件掉线/不可用'},
+         {a:'analysis', c:'W4.2“停止 / 尚未运行”状态', r:'维护任务未启动'}]}
+];
+
+/* ============ 渲染：在线灯演示 ============ */
+const LAMP_DEFS = [['SurrealDB',true],['zvec',true],['LLM',true]];
+function renderLamps(){
+  const box = document.getElementById('lamps');
+  box.innerHTML = LAMP_DEFS.map(([name,on],i)=>
+    `<span class="lamp ${on?'on':'off'}" data-i="${i}">${on?G.s_on:G.s_off}<span>${name}</span></span>`).join('');
+  box.querySelectorAll('.lamp').forEach(el=>el.addEventListener('click',()=>{
+    const i=+el.dataset.i; LAMP_DEFS[i][1]=!LAMP_DEFS[i][1];
+    const on=LAMP_DEFS[i][1];
+    el.className='lamp '+(on?'on':'off');
+    el.querySelector('svg').outerHTML = (on?G.s_on:G.s_off);
+    toast(on?`<b>${LAMP_DEFS[i][0]}</b> → state_connected`:`<b>${LAMP_DEFS[i][0]}</b> → state_disconnected`);
+  }));
+}
+
+/* ============ 渲染：过滤 chips ============ */
+let fArea='all', fGroup='all', fQ='';
+function countArea(a){return ICONS.filter(ic=>ic.uses.some(u=>u.a===a)).length}
+function countGroup(g){return ICONS.filter(ic=>ic.g===g).length}
+function renderChips(){
+  const ac=document.getElementById('areaChips');
+  const order=['all','global','docs','ontology','graph','qa','analysis'];
+  ac.innerHTML = order.map(a=>{
+    const label = a==='all'?'全部区域':AREAS[a].label;
+    const n = a==='all'?ICONS.length:countArea(a);
+    return `<span class="chip ${fArea===a?'active':''}" data-area="${a}">${label}<span class="n">${n}</span></span>`;
+  }).join('');
+  ac.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+    fArea=c.dataset.area; renderChips(); renderGrid(); highlightRegion();
+  }));
+  const gc=document.getElementById('groupChips');
+  const gorder=['all','linear','node','state'];
+  gc.innerHTML = gorder.map(g=>{
+    const label = g==='all'?'全部风格':GROUPS[g];
+    const n = g==='all'?ICONS.length:countGroup(g);
+    return `<span class="chip ${fGroup===g?'active':''}" data-group="${g}">${label}<span class="n">${n}</span></span>`;
+  }).join('');
+  gc.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+    fGroup=c.dataset.group; renderChips(); renderGrid();
+  }));
+}
+
+/* ============ 渲染：总览网格 ============ */
+function matchQ(ic){
+  if(!fQ) return true;
+  const hay = (ic.n+' '+ic.k+' '+ic.vis+' '+ic.uses.map(u=>AREAS[u.a].label+' '+u.c+' '+u.r).join(' ')).toLowerCase();
+  return hay.includes(fQ.toLowerCase());
+}
+function renderGrid(){
+  const grid=document.getElementById('grid');
+  const list = ICONS.filter(ic=>
+    (fArea==='all'||ic.uses.some(u=>u.a===fArea)) &&
+    (fGroup==='all'||ic.g===fGroup) && matchQ(ic));
+  if(!list.length){grid.innerHTML=`<p style="color:var(--ink-mute);font-family:var(--mono);grid-column:1/-1;padding:30px 0">无匹配图标 — 试试清空搜索或切换过滤。</p>`;return;}
+  grid.innerHTML = list.map((ic,idx)=>{
+    const uses = ic.uses
+      .filter(u=> fArea==='all' || u.a===fArea)   // 选中区域时只展示该区域落点
+      .map(u=>`<div class="use">
+          <span class="area" style="--ac:${AREAS[u.a].color}">${AREAS[u.a].label}</span>
+          <span class="ctrl">${esc(u.c)}<span class="role">${esc(u.r)}</span></span>
+        </div>`).join('');
+    return `<article class="ic ${ic.g==='linear'?'linear':''} reveal" style="--accent:${ic.accent};transition-delay:${Math.min(idx,8)*45}ms">
+      <div class="top">
+        <div class="glyph">${G[ic.glyph]}</div>
+        <div><div class="nm">${ic.n}</div><div class="grp">${GROUPS[ic.g]}</div></div>
+      </div>
+      <div class="keyrow"><span class="key" data-key="${ic.k}">${ic.k}</span><span class="copyhint">click to copy</span></div>
+      <p class="vis"><b>字形：</b>${ic.vis}</p>
+      <div class="uses">${uses}</div>
+    </article>`;
+  }).join('');
+  grid.querySelectorAll('.key').forEach(k=>k.addEventListener('click',()=>copy(k.dataset.key)));
+  observeReveal(grid.querySelectorAll('.reveal'));
+}
+
+/* ============ 渲染：反向视图（按区域） ============ */
+function renderRegions(){
+  const order=['global','docs','ontology','graph','qa','analysis'];
+  const box=document.getElementById('regions');
+  box.innerHTML = order.map(a=>{
+    const items = ICONS.filter(ic=>ic.uses.some(u=>u.a===a));
+    const lines = items.map(ic=>{
+      const cs = ic.uses.filter(u=>u.a===a).map(u=>`<div>· ${esc(u.c)} <span style="color:var(--ink-mute)">— ${esc(u.r)}</span></div>`).join('');
+      return `<div class="rline ${ic.g==='linear'?'linear':''}">
+        <div class="g" ${ic.g==='linear'?'':'style="color:'+ic.accent+'"'}>${G[ic.glyph]}</div>
+        <div class="t"><b>${ic.n}</b> <span class="k">${ic.k}</span><div class="c">${cs}</div></div>
+      </div>`;
+    }).join('');
+    return `<details class="region reveal" data-area="${a}" style="--ac:${AREAS[a].color}" open>
+      <summary><span class="rbar"></span><span class="rname">${AREAS[a].label}<small>${a}</small></span>
+        <span class="rcount">${items.length} icons</span>
+        <span class="chev">▸</span></summary>
+      <div class="rbody">${lines}</div>
+    </details>`;
+  }).join('');
+  observeReveal(box.querySelectorAll('.reveal'));
+}
+function highlightRegion(){
+  document.querySelectorAll('.region').forEach(r=>{
+    r.classList.toggle('hot', fArea!=='all' && r.dataset.area===fArea);
+    if(fArea!=='all' && r.dataset.area===fArea){ r.open=true; r.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  });
+}
+
+/* ============ 工具 ============ */
+function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function copy(key){
+  navigator.clipboard?.writeText(key);
+  toast(`已复制 key · <b>${key}</b>`);
+}
+let tT;
+function toast(html){
+  const t=document.getElementById('toast'); t.innerHTML=html; t.classList.add('show');
+  clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),1700);
+}
+let io;
+function observeReveal(nodes){
+  if(!io) io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.12});
+  nodes.forEach(n=>{ if(n.classList.contains('in'))return; io.observe(n); });
+}
+
+/* ============ 搜索 ============ */
+document.getElementById('q').addEventListener('input',e=>{fQ=e.target.value; renderGrid();});
+
+/* ============ init ============ */
+renderLamps(); renderChips(); renderGrid(); renderRegions();
+// 首屏揭示兜底
+setTimeout(()=>document.querySelectorAll('.reveal').forEach(n=>{const r=n.getBoundingClientRect(); if(r.top<innerHeight) n.classList.add('in');}),60);
+</script>
+</body>
+</html>

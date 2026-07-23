@@ -52,7 +52,7 @@ body::before {
   pointer-events: none; z-index: 0;
 }
 /* ── Layout ── */
-.app { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px 80px; }
+.app { position: relative; z-index: 1; width: 88%; margin: 0 auto; padding: 0 0 80px; }
 /* ── Header ── */
 header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
 .masthead { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
@@ -81,10 +81,11 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 /* ── Tabs ── */
 .tabs { display: flex; gap: 4px; margin-bottom: 24px; }
 .tab {
-  padding: 8px 16px; border-radius: var(--radius);
+  padding: 8px 14px; border-radius: var(--radius);
   font-size: 13px; font-weight: 500; cursor: pointer;
   border: 1px solid transparent; background: transparent;
   color: var(--text-secondary); transition: all 0.2s var(--ease);
+  white-space: nowrap; display: inline-flex; align-items: center;
 }
 .tab:hover { background: var(--surface-sunken); color: var(--text); }
 .tab.active { background: var(--surface); color: var(--text); border-color: var(--border-strong); box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
@@ -93,12 +94,11 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
   display: flex; gap: 8px; margin-bottom: 24px;
 }
 .search-bar input {
-  flex: 1; padding: 10px 14px;
-  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  flex: 1; padding: 10px 0;
+  border: none; border-radius: 0;
   font-family: var(--font-sans); font-size: 14px; color: var(--text);
-  background: var(--surface); transition: border-color 0.2s var(--ease);
+  background: transparent; outline: none;
 }
-.search-bar input:focus { outline: none; border-color: var(--accent); }
 .search-bar button {
   padding: 10px 20px; border: none; border-radius: var(--radius);
   background: var(--accent); color: #fff; font-family: var(--font-sans);
@@ -174,7 +174,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .graph-container { position:relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
 .graph-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .graph-toolbar .layout-group { display: flex; gap: 2px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius); }
-.layout-btn { padding: 5px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
+.layout-btn { padding: 5px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); white-space: nowrap; }
 .layout-btn:hover { color: var(--text); }
 .layout-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 .graph-controls { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
@@ -183,7 +183,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .graph-controls input[type=checkbox] { accent-color: var(--accent); }
 .graph-controls select { padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 4px; font-size: 11px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
 .graph-stats { font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); margin-left: auto; }
-#graph-svg { width: 100%; height: 560px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); cursor: grab; }
+#graph-svg { width: 100%; height: calc(88vh - 240px); min-height: 400px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); cursor: grab; }
 #graph-svg:active { cursor: grabbing; }
 .graph-tooltip { position: absolute; background: var(--text); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; pointer-events: none; opacity: 0; transition: opacity 0.15s var(--ease); max-width: 280px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .graph-tooltip.show { opacity: 1; }
@@ -200,22 +200,22 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .graph-link.highlight { opacity: 1; stroke-width: 2.5; }
 /* ── Ontology view ── */
 .onto-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
-.onto-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.onto-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .onto-stats { display: flex; gap: 6px; flex-wrap: wrap; }
 .onto-chip { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); }
 .onto-chip b { color: var(--text); font-weight: 600; }
 .onto-filters { display: flex; gap: 6px; align-items: center; }
 .onto-filters select { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 11px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
-.onto-actions { display: flex; align-items:center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
-.onto-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
-.onto-btn { padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
+.onto-actions { display: flex; align-items:center; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.onto-sep { width:1px; height:20px; background:var(--border); margin:0 2px; }
+.onto-btn { padding: 5px 10px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); white-space: nowrap; }
 .onto-btn:hover { color: var(--text); border-color: var(--text-secondary); }
 .onto-btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
-.onto-main { display: grid; grid-template-columns: 240px 1fr 280px; gap: 14px; min-height: 560px; }
+.onto-main { display: grid; grid-template-columns: 240px 1fr 280px; gap: 14px; height: calc(88vh - 240px); min-height: 400px; }
 @media (max-width: 1100px) { .onto-main { grid-template-columns: 1fr; } }
 .onto-sidebar { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); overflow: hidden; display: flex; flex-direction: column; }
 .onto-sidebar input { padding: 8px 10px; border: none; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-sans); background: var(--surface); outline: none; }
-.onto-list { overflow-y: auto; max-height: 520px; }
+.onto-list { overflow-y: auto; flex: 1; }
 .onto-list .onto-group-head { padding: 6px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); background: var(--surface-sunken); position: sticky; top: 0; }
 .onto-list .onto-item { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; transition: background 0.15s var(--ease); }
 .onto-list .onto-item:hover { background: var(--surface-sunken); }
@@ -224,13 +224,13 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .onto-list .onto-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onto-list .onto-item .ct { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); }
 .onto-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); position: relative; overflow: hidden; }
-#onto-svg { width: 100%; height: 560px; cursor: grab; display: block; }
+#onto-svg { width: 100%; height: 100%; cursor: grab; display: block; }
 #onto-svg:active { cursor: grabbing; }
 .onto-legend { position: absolute; bottom: 8px; left: 8px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 10px; color: var(--text-secondary); background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 6px; }
 .onto-legend .legend-item { display: flex; align-items: center; gap: 3px; }
 .onto-legend .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 .onto-legend .legend-line { width: 14px; height: 2px; border-radius: 1px; }
-.onto-detail { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; overflow-y: auto; max-height: 560px; font-size: 13px; }
+.onto-detail { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 16px; overflow-y: auto; font-size: 13px; }
 .onto-detail h4 { font-family: var(--font-serif); font-size: 17px; font-weight: 500; margin-bottom: 4px; }
 .onto-detail .onto-type-badge { display: inline-block; font-size: 10px; font-family: var(--font-mono); padding: 2px 7px; border-radius: 4px; margin-bottom: 10px; }
 .onto-detail .onto-desc { color: var(--text-secondary); font-size: 12px; line-height: 1.55; margin-bottom: 14px; }
@@ -509,6 +509,25 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .doc-conversations .conv .q { font-weight:500; }
 .doc-conversations .conv .a { color:var(--text-secondary); margin-top:4px; font-size:12px; }
 
+/* ── Icon system (from icon-map spec) ── */
+.icon-svg { width:16px; height:16px; display:inline-block; vertical-align:middle; flex-shrink:0; }
+.icon-svg.sm { width:13px; height:13px; }
+.icon-svg.lg { width:20px; height:20px; }
+.icon-svg.xl { width:24px; height:24px; }
+.tab .icon-svg { width:16px; height:16px; margin-right:6px; }
+.status-chip .icon-svg { width:13px; height:13px; }
+.onto-btn .icon-svg { width:15px; height:15px; margin-right:4px; }
+.legend-item .icon-svg { width:14px; height:14px; margin-right:4px; }
+.search-bar .icon-svg { width:17px; height:17px; color:var(--text-tertiary); flex-shrink:0; }
+.search-bar .search-wrap { position:relative; flex:1; display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius); padding:0 12px; }
+.search-bar .search-wrap input { flex:1; padding:10px 0; border:none; background:transparent; font-family:var(--font-sans); font-size:14px; color:var(--text); outline:none; }
+.back-btn .icon-svg { width:14px; height:14px; margin-right:4px; }
+/* node color accent classes */
+.icon-node-doc { color:#4f93d6; } .icon-node-ent { color:#e0a93b; } .icon-node-tag { color:#9b6bb0; }
+.icon-node-top { color:#4fa777; } .icon-node-raw { color:#9c6b53; } .icon-node-arc { color:#c0473f; }
+.icon-node-con { color:#e8862e; } .icon-node-ver { color:#7c7a23; }
+.icon-state-ok { color:#1f9d57; } .icon-state-pend { color:#e0991a; } .icon-state-off { color:#9aa0a6; }
+
 </style>
 </head>
 <body>
@@ -530,20 +549,23 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 
   <!-- ── Tabs（建图→导航两阶段心智模型：离线建图 文档库/本体/图谱，在线导航 问答，维护 分析）── -->
   <div class="tabs">
-    <button class="tab active" data-tab="library">文档库</button>
-    <button class="tab" data-tab="ontology">本体</button>
-    <button class="tab" data-tab="graph">知识图谱</button>
-    <button class="tab" data-tab="ask">问答</button>
-    <button class="tab" data-tab="analytics">分析</button>
+    <button class="tab active" data-tab="library"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3.5" width="9" height="6" rx="1"/><path d="M10.5 6h4"/><path d="M3 9h5l1.6 1.6H20a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>文档库</button>
+    <button class="tab" data-tab="ontology"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.6" r="1.8"/><path d="M12 6.4v1.9"/><path d="M6.5 8.3h11"/><path d="M6.5 8.3v1.9"/><path d="M17.5 8.3v1.9"/><circle cx="6.5" cy="12" r="1.8"/><circle cx="17.5" cy="12" r="1.8"/><path d="M4 15.4h5M15 15.4h5"/><path d="M4 15.4v.7M9 15.4v.7M15 15.4v.7M20 15.4v.7"/><circle cx="4" cy="17.8" r="1.4"/><circle cx="9" cy="17.8" r="1.4"/><circle cx="15" cy="17.8" r="1.4"/><circle cx="20" cy="17.8" r="1.4"/></svg>本体</button>
+    <button class="tab" data-tab="graph"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.3"/><circle cx="6" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="5.5" cy="17" r="1.6"/><circle cx="17.5" cy="16.5" r="1.6"/><circle cx="19.5" cy="11.5" r="1.6"/><path d="M10.4 10.4 7.2 7.2M13.6 10.4 16.8 7.2M10.2 13.4 6.7 15.8M13.8 13.4 16.4 15.4M14.2 11.6 17.9 11.5"/></svg>知识图谱</button>
+    <button class="tab" data-tab="ask"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="11.5" height="8" rx="2.2"/><path d="M7 12.5v3l3-3"/><path d="M8.2 8.1a1.7 1.7 0 1 1 2.4 1.6c-.5.2-.8.6-.8 1.1"/><path d="M9.6 12h.01"/><path d="M16.5 8h2.5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-2-2"/></svg>问答</button>
+    <button class="tab" data-tab="analytics"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M6.4 7h.01M8.4 7h.01M10.4 7h.01"/><path d="M6 12l3-2.4 3 1.5 4-3.6"/><path d="M6 17.6v-2M9.5 17.6v-3M13 17.6v-1.4"/><path d="M16 15h3M16 17.6h3"/></svg>分析</button>
   </div>
 
   <!-- ── Search bar (library + graph) ── -->
   <div class="search-bar" id="search-bar">
-    <input type="text" id="search-input" placeholder="搜索知识库（四路融合：向量 + 全文 + 图 + 元数据）…">
-    <button onclick="doSearch()">搜索</button>
+    <span class="search-wrap">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.5 14.5 20 20"/></svg>
+      <input type="text" id="search-input" placeholder="搜索知识库（四路融合：向量 + 全文 + 图 + 元数据）…">
+    </span>
+    <button onclick="doSearch()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="5.5"/><path d="M14.5 14.5 20 20"/></svg> 搜索</button>
     <label class="sb-toggle"><input type="checkbox" id="search-code"> 代码检索</label>
     <label class="sb-toggle"><input type="checkbox" id="search-grep"> 正则 grep</label>
-    <button class="sb-toggle" id="code-struct-btn" onclick="toggleCodeSearch()" style="cursor:pointer;border:none;background:none;color:var(--blue-fg);">⌘ 代码结构检索</button>
+    <button class="sb-toggle" id="code-struct-btn" onclick="toggleCodeSearch()" style="cursor:pointer;border:none;background:none;color:var(--blue-fg);"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/><circle cx="16.6" cy="16.6" r="3"/><path d="M18.8 18.8 21 21"/></svg> 代码结构检索</button>
   </div>
 
   <!-- ── Library view ── -->
@@ -716,8 +738,8 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="layout-btn" data-layout="radial">环形聚焦</button>
           <button class="layout-btn" data-layout="cluster">类型聚类</button>
         </div>
-        <button class="layout-btn" onclick="toggleGraphQuery()" id="gq-toggle-btn">图查询 ▸</button>
-        <button class="layout-btn" onclick="resetGraph()" id="graph-reset-btn" style="display:none;">返回全图</button>
+        <button class="layout-btn" onclick="toggleGraphQuery()" id="gq-toggle-btn"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="5.6"/><path d="M14.6 14.6 20 20"/></svg> 图查询 ▸</button>
+        <button class="layout-btn" onclick="resetGraph()" id="graph-reset-btn" style="display:none;"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/></svg> 返回全图</button>
       </div>
       <div id="graph-query-panel" style="display:none;background:var(--surface-sunken);padding:12px 16px;border-radius:var(--radius);margin-bottom:8px;font-size:13px;">
         <!-- 查询类型 Tab -->
@@ -896,7 +918,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
       <div class="sample-questions" id="sample-questions"></div>
       <div class="ask-input">
         <input type="text" id="ask-input" placeholder="向 Wiki Agent 提问…" onkeydown="if(event.key==='Enter')doAsk()">
-        <button id="ask-btn" onclick="doAsk()">提问</button>
+        <button id="ask-btn" onclick="doAsk()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="11.5" height="8" rx="2.2"/><path d="M7 12.5v3l3-3"/><path d="M8.2 8.1a1.7 1.7 0 1 1 2.4 1.6c-.5.2-.8.6-.8 1.1"/><path d="M9.6 12h.01"/><path d="M16.5 8h2.5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-2-2"/></svg> 提问</button>
       </div>
       <div id="ask-result"></div>
       <div id="hot-docs-container" style="margin-top:32px;"></div>
@@ -914,18 +936,18 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <select id="onto-edge-filter" title="边类型"><option value="">全部关系</option></select>
         </div>
         <div class="onto-actions">
-          <button class="onto-btn primary" onclick="ontoCreateConcept()">+ 新建概念</button>
+          <button class="onto-btn primary" onclick="ontoCreateConcept()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/></svg>新建概念</button>
           <span class="onto-sep"></span>
-          <button class="onto-btn" onclick="ontoBuild()">LLM 构建</button>
-          <button class="onto-btn" onclick="ontoRepairBindings()">修复绑定</button>
+          <button class="onto-btn" onclick="ontoBuild()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.6"/><path d="M9.5 7V5M12 7V5M14.5 7V5M9.5 17v2M12 17v2M14.5 17v2M7 9.5H5M7 12H5M7 14.5H5M17 9.5h2M17 12h2M17 14.5h2"/><path d="M12.8 9.4 11 12.3h1.7l-1 2.5"/></svg>LLM 构建</button>
+          <button class="onto-btn" onclick="ontoRepairBindings()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 14.6 8 16.2a2.3 2.3 0 0 1-3.3-3.3l2-2a2.3 2.3 0 0 1 3.3 0"/><path d="M11 11l1.6-1.6a2.3 2.3 0 0 1 3.3 3.3l-1 1"/><path d="M14.4 13.6 19 18.2"/><path d="M17.2 16.4 19 18.2l1.6-1.6-1-1 .5-1.6-1.6-.5z"/></svg>修复绑定</button>
           <span class="onto-sep"></span>
-          <button class="onto-btn" onclick="ontoPendingReview()">待审核</button>
-          <button class="onto-btn" onclick="ontoSnapshot()">快照</button>
-          <button class="onto-btn" onclick="ontoRollback()">回滚</button>
+          <button class="onto-btn" onclick="ontoPendingReview()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 7.5V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M12 4.4v1.4M12 18.2v1.4M4.4 12H5.8M18.2 12h1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>待审核</button>
+          <button class="onto-btn" onclick="ontoSnapshot()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7.5" width="18" height="12" rx="2"/><path d="M8.5 7.5 10 5h4l1.5 2.5"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17.5 10.4h.01"/></svg>快照</button>
+          <button class="onto-btn" onclick="ontoRollback()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h8a5 5 0 0 1 0 10H8"/><path d="M8.5 5.5 5 9l3.5 3.5"/></svg>回滚</button>
           <span class="onto-sep"></span>
-          <button class="onto-btn" onclick="ontoExport()">导出</button>
-          <button class="onto-btn" onclick="ontoImport()">导入</button>
-          <button class="onto-btn" onclick="loadOntology()">刷新</button>
+          <button class="onto-btn" onclick="ontoExport()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/><path d="M12 13V4"/><path d="M8.5 7.5 12 4l3.5 3.5"/></svg>导出</button>
+          <button class="onto-btn" onclick="ontoImport()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/><path d="M12 4v9"/><path d="M8.5 9.5 12 13l3.5-3.5"/></svg>导入</button>
+          <button class="onto-btn" onclick="loadOntology()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/></svg>刷新</button>
         </div>
       </div>
       <div id="ontology-version-result" class="analytics-result" style="margin-top:4px;"></div>
@@ -948,7 +970,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
       <div class="analytics-card">
         <h3>查询日志盲区分析 <span class="muted">(W4.3)</span></h3>
         <p class="muted">统计最近对话，列出未命中任何已审核概念的高频问题，提示本体待补充方向。</p>
-        <button class="onto-btn primary" onclick="runQueryLog()">分析最近查询</button>
+        <button class="onto-btn primary" onclick="runQueryLog()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M6.4 7h.01M8.4 7h.01M10.4 7h.01"/><path d="M6 12l3-2.4 3 1.5 4-3.6"/><path d="M6 17.6v-2M9.5 17.6v-3M13 17.6v-1.4"/><path d="M16 15h3M16 17.6h3"/></svg>分析最近查询</button>
         <div id="query-log-result" class="analytics-result"></div>
       </div>
       <div class="analytics-card">
@@ -961,7 +983,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <input type="text" id="reindex-old" placeholder="old_ref（如 HEAD~1）" class="analytics-input">
           <input type="text" id="reindex-new" placeholder="new_ref（如 HEAD）" class="analytics-input">
         </div>
-        <button class="onto-btn" onclick="doReindex()">执行增量索引</button>
+        <button class="onto-btn" onclick="doReindex()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/></svg>执行增量索引</button>
         <div id="reindex-result" class="analytics-result"></div>
       </div>
       <div class="analytics-card">
@@ -980,10 +1002,10 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <input type="number" id="maint-interval" value="24" min="1" placeholder="调度间隔(h)" class="analytics-input" style="width:48%">
         </div>
         <div class="form-row">
-          <button class="onto-btn primary" onclick="runMaintenance()">立即运行维护</button>
-          <button class="onto-btn" onclick="startMaintenance()">启动定时</button>
-          <button class="onto-btn" onclick="stopMaintenance()">停止</button>
-          <button class="onto-btn" onclick="loadMaintenanceReport()">查看报告</button>
+          <button class="onto-btn primary" onclick="runMaintenance()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/></svg>立即运行维护</button>
+          <button class="onto-btn" onclick="startMaintenance()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 9a10 10 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="currentColor"/></svg>启动定时</button>
+          <button class="onto-btn" onclick="stopMaintenance()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 9a10 10 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="currentColor"/><path d="M4 4 20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>停止</button>
+          <button class="onto-btn" onclick="loadMaintenanceReport()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M6.4 7h.01M8.4 7h.01M10.4 7h.01"/><path d="M6 12l3-2.4 3 1.5 4-3.6"/><path d="M6 17.6v-2M9.5 17.6v-3M13 17.6v-1.4"/><path d="M16 15h3M16 17.6h3"/></svg>查看报告</button>
         </div>
         <div id="maintenance-result" class="analytics-result"></div>
         <div id="maintenance-status" class="muted" style="margin-top:6px;"></div>
@@ -1021,7 +1043,10 @@ async function checkHealth() {
     const setChip = (id, ok, label) => {
       const el = document.getElementById(id);
       el.className = 'status-chip ' + (ok ? 'ok' : 'err');
-      el.innerHTML = `<span class="dot"></span>${label}`;
+      const iconSvg = ok
+        ? `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 9a10 10 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="currentColor"/></svg>`
+        : `<svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 9a10 10 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8 12.5a5.5 5.5 0 0 1 8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="12" cy="16.6" r="1.9" fill="currentColor"/><path d="M4 4 20 20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg>`;
+      el.innerHTML = `${iconSvg}${label}`;
     };
     setChip('status-surreal', d.surrealdb, 'SurrealDB');
     setChip('status-zvec', d.zvec, 'zvec');
@@ -1048,9 +1073,12 @@ async function loadDocs() {
 
 function renderDocList(docs) {
   const el = document.getElementById('doc-list');
+  const docNewIcon = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/></svg>`;
+  const metaIcon = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M6.4 7h.01M8.4 7h.01M10.4 7h.01"/><path d="M6 12l3-2.4 3 1.5 4-3.6"/><path d="M6 17.6v-2M9.5 17.6v-3M13 17.6v-1.4"/><path d="M16 15h3M16 17.6h3"/></svg>`;
+  const codeIcon = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/><circle cx="16.6" cy="16.6" r="3"/><path d="M18.8 18.8 21 21"/></svg>`;
   const compileBtn = document.getElementById('status-llm').classList.contains('ok')
-    ? `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleCompile()">+ 编译文档</button><button class="back-btn" onclick="toggleMetadata()">📊 元数据</button><button class="back-btn" onclick="toggleCodeSearch()">⌘ 代码结构检索</button></div>`
-    : `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleMetadata()">📊 元数据</button><button class="back-btn" onclick="toggleCodeSearch()">⌘ 代码结构检索</button></div>`;
+    ? `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleCompile()">${docNewIcon}+ 编译文档</button><button class="back-btn" onclick="toggleMetadata()">${metaIcon}元数据</button><button class="back-btn" onclick="toggleCodeSearch()">${codeIcon}代码结构检索</button></div>`
+    : `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleMetadata()">${metaIcon}元数据</button><button class="back-btn" onclick="toggleCodeSearch()">${codeIcon}代码结构检索</button></div>`;
   if (!docs.length) {
     el.innerHTML = compileBtn + '<div class="empty"><div class="icon">📭</div><div>知识库尚无文档</div><div class="empty-hint">这是建图阶段（Step 1-4）的起点。点 <b>+ 编译文档</b> 上传 Markdown 让 LLM 编译为结构化 wiki，或用 <b>路径导入</b> 多格式批量索引。</div></div>';
     return;
@@ -1097,22 +1125,22 @@ async function showDocDetail(docId) {
       </div>`;
     }
     el.innerHTML = `
-      <button class="back-btn" onclick="backToList()">← 返回列表</button>
+      <button class="back-btn" onclick="backToList()"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h8a5 5 0 0 1 0 10H8"/><path d="M8.5 5.5 5 9l3.5 3.5"/></svg>返回列表</button>
       <div class="doc-detail">
         <h2>${esc(doc.title)}</h2>
         ${doc.summary ? `<div class="summary">${esc(doc.summary)}</div>` : ''}
         <div class="content">${content}</div>
         <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="back-btn" onclick="exportDoc('${doc.id}')">导出 Markdown</button>
-          <button class="back-btn" onclick="showVersionChain('${doc.id}')">版本历史</button>
-          <button class="back-btn" onclick="loadCodeSymbols('${doc.id}')">代码符号</button>
-          <button class="back-btn" onclick="askAboutDoc('${doc.id}','${esc(doc.title).replace(/'/g,"\\'")}')">⌥ 就此文档提问</button>
-          <button class="back-btn" onclick="syncVectors('${doc.id}')">同步向量</button>
-          <button class="back-btn" onclick="loadDocConversations('${doc.id}')">关联对话</button>
+          <button class="back-btn" onclick="exportDoc('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/><path d="M12 13V4"/><path d="M8.5 7.5 12 4l3.5 3.5"/></svg>导出 Markdown</button>
+          <button class="back-btn" onclick="showVersionChain('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 8a7 7 0 1 1-1.6 6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M5 4.4V8H8.6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 9v3.4l2.5 1.5" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/></svg>版本历史</button>
+          <button class="back-btn" onclick="loadCodeSymbols('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/><circle cx="16.6" cy="16.6" r="3"/><path d="M18.8 18.8 21 21"/></svg>代码符号</button>
+          <button class="back-btn" onclick="askAboutDoc('${doc.id}','${esc(doc.title).replace(/'/g,"\\'")}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="11.5" height="8" rx="2.2"/><path d="M7 12.5v3l3-3"/><path d="M8.2 8.1a1.7 1.7 0 1 1 2.4 1.6c-.5.2-.8.6-.8 1.1"/><path d="M9.6 12h.01"/><path d="M16.5 8h2.5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-2-2"/></svg>就此文档提问</button>
+          <button class="back-btn" onclick="syncVectors('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 12a7.4 7.4 0 0 1 12.7-5.2"/><path d="M17.4 3.6v3.2h-3.2"/><path d="M19.4 12a7.4 7.4 0 0 1-12.7 5.2"/><path d="M6.6 20.4v-3.2h3.2"/></svg>同步向量</button>
+          <button class="back-btn" onclick="loadDocConversations('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="10" rx="4.5" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><path d="M8 14.5v3.6l4-3.6" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><circle cx="9" cy="10" r="1" fill="#15171c"/><circle cx="12" cy="10" r="1" fill="#15171c"/><circle cx="15" cy="10" r="1" fill="#15171c"/></svg>关联对话</button>
           ${document.getElementById('status-llm').classList.contains('ok')
-            ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>
-               <button class="back-btn" onclick="buildDocGraph('${doc.id}')">构建图边</button>` : ''}
-          <button class="back-btn" style="color:var(--red-fg);border-color:var(--red-fg);" onclick="deleteDocument('${doc.id}')">删除文档</button>
+            ? `<button class="back-btn" onclick="extractEntities('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z" fill="#e0a93b" stroke="#15171c" stroke-width="1.4"/><path d="M12 12 20 7.5M12 12 4 7.5M12 12v9" stroke="#15171c" stroke-width="1.4"/></svg>抽取实体</button>
+               <button class="back-btn" onclick="buildDocGraph('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.3"/><circle cx="6" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="5.5" cy="17" r="1.6"/><circle cx="17.5" cy="16.5" r="1.6"/><circle cx="19.5" cy="11.5" r="1.6"/><path d="M10.4 10.4 7.2 7.2M13.6 10.4 16.8 7.2M10.2 13.4 6.7 15.8M13.8 13.4 16.4 15.4M14.2 11.6 17.9 11.5"/></svg>构建图边</button>` : ''}
+          <button class="back-btn" style="color:var(--red-fg);border-color:var(--red-fg);" onclick="deleteDocument('${doc.id}')"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 14.6 8 16.2a2.3 2.3 0 0 1-3.3-3.3l2-2a2.3 2.3 0 0 1 3.3 0"/><path d="M11 11l1.6-1.6a2.3 2.3 0 0 1 3.3 3.3l-1 1"/><path d="M14.4 13.6 19 18.2"/><path d="M17.2 16.4 19 18.2l1.6-1.6-1-1 .5-1.6-1.6-.5z"/></svg>删除文档</button>
         </div>
         <div id="code-symbols-container"></div>
         <div id="version-chain-container"></div>
@@ -1210,13 +1238,13 @@ async function doSearch() {
     el.innerHTML = d.results.map(r => {
       const scores = renderScoreBadges(r);
       const code = (r.file_path || r.function_name)
-        ? `<div class="code-ref">📄 ${esc(r.file_path || '')}${r.function_name ? ' · ' + esc(r.function_name) : ''}</div>` : '';
+        ? `<div class="code-ref"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/></svg> ${esc(r.file_path || '')}${r.function_name ? ' · ' + esc(r.function_name) : ''}</div>` : '';
       return `
       <div class="search-result" onclick="showDocDetail('${r.doc_id}')">
         <div class="title">${esc(r.title)} <span class="score">${r.score}</span></div>
         <div class="excerpt">${esc(r.excerpt || '')}</div>
         ${code}
-        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}${scores}<button class="onto-mini" style="float:right;margin-left:8px" onclick="event.stopPropagation();askAboutResult('${esc((r.title||'').replace(/'/g,"\\'"))}')">⌥ 提问</button></div>
+        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}${scores}<button class="onto-mini" style="float:right;margin-left:8px" onclick="event.stopPropagation();askAboutResult('${esc((r.title||'').replace(/'/g,"\\'"))}')"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="11.5" height="8" rx="2.2"/><path d="M7 12.5v3l3-3"/><path d="M8.2 8.1a1.7 1.7 0 1 1 2.4 1.6c-.5.2-.8.6-.8 1.1"/><path d="M9.6 12h.01"/><path d="M16.5 8h2.5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v2l-2-2"/></svg> 提问</button></div>
       </div>`;
     }).join('');
   } catch (e) {
@@ -1317,10 +1345,21 @@ function populateNodeSelects() {
   if (lineageEl) { lineageEl.innerHTML = placeholder + docOptions; }
 }
 
+const NODE_ICONS = {
+  document: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z" fill="#4f93d6" stroke="#15171c" stroke-width="1.4"/><path d="M14 3v4h4" fill="#bcd6ef" stroke="#15171c" stroke-width="1.4"/><path d="M9.5 11h7M9.5 14h7M9.5 17h4" stroke="#15171c" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  entity: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M12 3 20 7.5v9L12 21 4 16.5v-9z" fill="#e0a93b" stroke="#15171c" stroke-width="1.4"/><path d="M12 12 20 7.5M12 12 4 7.5M12 12v9" stroke="#15171c" stroke-width="1.4"/></svg>`,
+  tag: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M13 3h7a1 1 0 0 1 1 1v7l-9 9-8-8 9-9z" fill="#9b6bb0" stroke="#15171c" stroke-width="1.4"/><circle cx="17" cy="7" r="1.5" fill="#fff" stroke="#15171c" stroke-width="1.2"/></svg>`,
+  topic: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z" fill="#4fa777" stroke="#15171c" stroke-width="1.4"/></svg>`,
+  raw: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2" fill="#9c6b53" stroke="#15171c" stroke-width="1.4"/><path d="M10 9.5 7.5 12 10 14.5M14 9.5 16.5 12 14 14.5" stroke="#15171c" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`,
+  archive: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="4" rx="1" fill="#c0473f" stroke="#15171c" stroke-width="1.4"/><path d="M5 9h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z" fill="#c0473f" stroke="#15171c" stroke-width="1.4"/><rect x="10" y="12" width="4" height="2" rx="1" fill="#fff" stroke="#15171c" stroke-width="1.2"/></svg>`,
+  conversation: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="10" rx="4.5" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><path d="M8 14.5v3.6l4-3.6" fill="#e8862e" stroke="#15171c" stroke-width="1.4"/><circle cx="9" cy="10" r="1" fill="#15171c"/><circle cx="12" cy="10" r="1" fill="#15171c"/><circle cx="15" cy="10" r="1" fill="#15171c"/></svg>`,
+  version: `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke-linejoin="round"><path d="M5 8a7 7 0 1 1-1.6 6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M5 4.4V8H8.6" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 9v3.4l2.5 1.5" stroke="#7c7a23" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`
+};
+
 function renderLegend() {
   const legend = document.getElementById('graph-legend');
   legend.innerHTML = Object.entries(TYPE_COLORS).map(([t, c]) =>
-    `<div class="legend-item"><div class="legend-dot" style="background:${c}"></div>${t}</div>`
+    `<div class="legend-item">${NODE_ICONS[t] || `<span class="legend-dot" style="background:${c}"></span>`}${t}</div>`
   ).join('');
 }
 
@@ -3625,7 +3664,7 @@ async function doCodeSearch() {
     const res = d.results || [];
     if (!res.length) { el.innerHTML = notes + '<div class="blind">未命中代码符号（可能概念未绑定 file_path）</div>'; return; }
     el.innerHTML = notes + res.map(r => {
-      const ref = (r.file_path || r.function_name) ? `<div class="ch-ref">📄 ${esc(r.file_path||'')}${r.function_name ? ' · ƒ ' + esc(r.function_name) : ''}</div>` : '';
+      const ref = (r.file_path || r.function_name) ? `<div class="ch-ref"><svg class="icon-svg sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8 4.5 11 8 14"/><path d="M13.5 8 17 11l-3.5 3"/><path d="M12 6.5 10 13.5"/></svg> ${esc(r.file_path||'')}${r.function_name ? ' · ƒ ' + esc(r.function_name) : ''}</div>` : '';
       return `<div class="code-hit" onclick="showDocDetail('${esc(r.doc_id)}')">
         <div class="ch-title">${esc(r.title)} <span class="score">${r.final_score ?? r.original_score ?? ''}</span></div>
         ${ref}
