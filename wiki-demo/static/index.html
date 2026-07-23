@@ -171,7 +171,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .score { font-size: 11px; font-family: var(--font-mono); color: var(--text-tertiary); }
 .routes-summary { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; font-family: var(--font-mono); }
 /* ── Graph view ── */
-.graph-container { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
+.graph-container { position:relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
 .graph-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .graph-toolbar .layout-group { display: flex; gap: 2px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius); }
 .layout-btn { padding: 5px 12px; border: none; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
@@ -206,7 +206,8 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .onto-chip b { color: var(--text); font-weight: 600; }
 .onto-filters { display: flex; gap: 6px; align-items: center; }
 .onto-filters select { padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; font-size: 11px; font-family: var(--font-mono); background: var(--surface); color: var(--text); }
-.onto-actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.onto-actions { display: flex; align-items:center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.onto-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
 .onto-btn { padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-secondary); font-size: 12px; font-weight: 500; font-family: var(--font-sans); cursor: pointer; transition: all 0.2s var(--ease); }
 .onto-btn:hover { color: var(--text); border-color: var(--text-secondary); }
 .onto-btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
@@ -316,6 +317,9 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 /* ── Empty ── */
 .empty { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
 .empty .icon { font-size: 32px; margin-bottom: 12px; }
+.empty .empty-hint { font-size:13px; color:var(--text-tertiary); max-width:420px; margin:12px auto 0; line-height:1.6; }
+.empty .empty-hint b { color:var(--text-secondary); }
+.graph-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:var(--text-tertiary); pointer-events:none; padding:20px; }
 /* ── Metadata view ── */
 .metadata-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; }
 .metadata-section h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
@@ -329,6 +333,15 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 /* ── Compile box ── */
 .compile-box { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
 .compile-box h3 { font-family: var(--font-serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+/* ── Compile mode switcher ── */
+.compile-modes { display:flex; gap:0; margin-bottom:14px; border-bottom:1px solid var(--border); }
+.cmode-btn { padding:8px 14px; font-size:13px; font-weight:500; color:var(--text-secondary); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; font-family:var(--font-sans); }
+.cmode-btn:hover { color:var(--text); }
+.cmode-btn.active { color:var(--text); border-bottom-color:var(--text); }
+.cmode-hint { font-size:12px; color:var(--text-tertiary); margin-bottom:12px; line-height:1.5; }
+.cmode-divider { display:flex; align-items:center; text-align:center; margin:14px 0; color:var(--text-tertiary); font-size:12px; }
+.cmode-divider::before, .cmode-divider::after { content:''; flex:1; border-bottom:1px dashed var(--border); }
+.cmode-divider span { padding:0 10px; }
 /* ── Upload zone ── */
 .upload-zone { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 12px; transition: border-color 0.2s var(--ease); }
 .upload-zone.dragover { border-color: var(--blue-fg); background: var(--blue-bg); }
@@ -402,6 +415,61 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .uncertain-box { margin-top:10px; background:#F2F2F0; border:1px solid var(--border-strong); border-radius:6px; padding:8px 12px; font-size:13px; }
 .uncertain-box .unc-title { font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
 .uncertain-box ul { margin:0; padding-left:18px; }
+/* ── 推理链可视化（Step5-9，对齐 AI推理引擎.md）── */
+.reasoning-chain { margin-top:16px; display:flex; flex-direction:column; gap:0; border-left:2px solid var(--border-strong); padding-left:0; }
+.rc-step { position:relative; padding:10px 0 10px 20px; }
+.rc-step::before { content:''; position:absolute; left:-6px; top:14px; width:10px; height:10px; border-radius:50%; background:var(--surface); border:2px solid var(--text-secondary); }
+.rc-step.locate::before { border-color:#6B3FA0; background:#F0EAFB; }
+.rc-step.plan::before { border-color:#1F6C9F; background:#E1F3FE; }
+.rc-step.exec::before { border-color:#346538; background:#EDF3EC; }
+.rc-step.path::before { border-color:#956400; background:#FBF3DB; }
+.rc-step.loop::before { border-color:#9F2F2D; background:#FDEBEC; }
+.rc-label { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.rc-body { font-size:13px; color:var(--text); line-height:1.6; }
+.rc-chips { display:flex; flex-wrap:wrap; gap:4px; }
+.rc-concept { display:inline-flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--border-strong); border-radius:4px; padding:2px 8px; font-size:12px; cursor:pointer; }
+.rc-concept:hover { border-color:var(--purple-fg); color:var(--purple-fg); }
+.rc-concept .conf { font-size:10px; color:var(--text-tertiary); font-family:var(--font-mono,monospace); }
+.rc-concept.implicit { border-style:dashed; color:var(--text-secondary); }
+.rc-strategy { display:inline-block; background:#E1F3FE; border:1px solid #1F6C9F; color:#1F6C9F; border-radius:4px; padding:2px 8px; font-size:11px; font-family:var(--font-mono,monospace); }
+.rc-evidoc { display:inline-block; background:var(--surface); border:1px solid var(--border-strong); border-radius:4px; padding:2px 8px; font-size:12px; cursor:pointer; color:var(--blue-fg); }
+.rc-evidoc:hover { background:var(--blue-bg); }
+.rc-meta { font-size:12px; color:var(--text-secondary); font-family:var(--font-mono,monospace); }
+.rc-constraints { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.rc-constraints .ck { display:inline-block; background:var(--surface-sunken); border-radius:3px; padding:1px 6px; margin:2px 4px 2px 0; }
+.rc-iter { display:flex; gap:8px; align-items:flex-start; margin-top:4px; }
+.rc-iter .rnd { font-size:11px; font-weight:600; color:var(--text-tertiary); min-width:48px; font-family:var(--font-mono,monospace); }
+.rc-iter .tools { font-size:12px; color:var(--text-secondary); }
+.rc-iter .tools .t { display:inline-block; background:var(--surface-sunken); border-radius:3px; padding:1px 6px; margin:2px 4px 2px 0; font-family:var(--font-mono,monospace); }
+.rc-iter .tools .t.eval { color:#9F2F2D; } .rc-iter .tools .t.rerank { color:#956400; }
+/* ── Step8 四维分 / Step9 终止原因 / Step10 引用 / 快速通道徽章 ── */
+.path-badge { display:inline-block; border-radius:20px; padding:2px 10px; font-size:11px; font-family:var(--font-mono,monospace); margin:6px 8px 0 0; }
+.path-badge.fast { background:var(--green-bg); border:1px solid var(--green-fg); color:var(--green-fg); }
+.path-badge.deep { background:var(--blue-bg); border:1px solid var(--blue-fg); color:var(--blue-fg); }
+.clarify-box .cand { cursor:pointer; transition:all .15s var(--ease); }
+.clarify-box .cand:hover { background:var(--yellow-bg); border-color:var(--yellow-fg); color:var(--yellow-fg); }
+.rerank-scores { margin-top:8px; }
+.rerank-scores .rs-head { font-size:11px; color:var(--text-tertiary); margin-bottom:4px; font-family:var(--font-mono,monospace); }
+.rs-doc { background:var(--surface); border:1px solid var(--border-strong); border-radius:6px; padding:6px 10px; margin-bottom:6px; }
+.rs-doc .rs-title { font-size:12px; font-weight:600; color:var(--text); margin-bottom:5px; }
+.rs-doc .rs-fin { color:var(--text-tertiary); font-weight:400; font-family:var(--font-mono,monospace); }
+.rs-bars { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.rs-bar { font-size:10px; }
+.rs-bar .rs-bl { display:flex; justify-content:space-between; color:var(--text-tertiary); font-family:var(--font-mono,monospace); margin-bottom:2px; }
+.rs-bar .rs-track { height:4px; background:var(--surface-sunken); border-radius:2px; overflow:hidden; }
+.rs-bar .rs-fill { height:100%; border-radius:2px; }
+.rs-bar.sem .rs-fill { background:#6B3FA0; } .rs-bar.con .rs-fill { background:#1F6C9F; }
+.rs-bar.str .rs-fill { background:#346538; } .rs-bar.fre .rs-fill { background:#956400; }
+.term-reason { margin-top:6px; font-size:11px; font-family:var(--font-mono,monospace); color:var(--text-tertiary); }
+.term-reason b { color:var(--red-fg); }
+.citations { margin-top:10px; background:var(--surface-sunken); border:1px solid var(--border-strong); border-radius:6px; padding:10px 12px; }
+.citations .ct-title { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+.citations .ct-item { font-size:12px; color:var(--text-secondary); padding:4px 0; border-bottom:1px dashed var(--border); }
+.citations .ct-item:last-child { border-bottom:none; }
+.citations .ct-item b { color:var(--text); font-weight:600; cursor:pointer; }
+.citations .ct-item b:hover { color:var(--blue-fg); }
+.citations .ct-src { display:inline-block; background:var(--surface); border:1px solid var(--border-strong); border-radius:3px; padding:0 5px; margin-left:4px; font-size:10px; font-family:var(--font-mono,monospace); color:var(--text-tertiary); }
+.citations .ct-excerpt { display:block; margin-top:2px; color:var(--text-tertiary); font-size:11px; }
 .status-chip-sm { display:inline-block; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:6px; }
 .status-chip-sm.ok { background:#E6F0E6; color:#346538; }
 .status-chip-sm.pend { background:#FBF1DD; color:#956400; }
@@ -413,6 +481,33 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
 .code-symbols .sym { display:flex; gap:8px; padding:4px 0; border-bottom:1px dashed var(--border); font-size:13px; }
 .code-symbols .sym .kind { color:var(--text-tertiary); font-family:var(--font-mono,monospace); min-width:54px; }
 .code-symbols .sym .loc { color:var(--text-tertiary); margin-left:auto; font-family:var(--font-mono,monospace); }
+
+/* ── Modal overlay（本体 CRUD 表单）── */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal-box { background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius-lg); padding:24px; width:min(520px,92vw); max-height:86vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,0.25); }
+.modal-box h3 { font-family:var(--font-serif); font-size:20px; font-weight:500; margin-bottom:16px; }
+.modal-box .modal-field { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+.modal-box .modal-field label { font-size:11px; font-weight:500; color:var(--text-secondary); }
+.modal-box .modal-field input, .modal-box .modal-field select, .modal-box .modal-field textarea {
+  padding:8px 10px; border:1px solid var(--border-strong); border-radius:6px; font-family:var(--font-sans); font-size:13px; background:var(--surface); color:var(--text); }
+.modal-box .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.modal-box .modal-hint { font-size:11px; color:var(--text-tertiary); margin-top:-4px; margin-bottom:8px; }
+
+/* ── 代码结构化检索面板（策略5 [调用链]）── */
+.code-panel { background:var(--surface); border:1px solid var(--border-strong); border-radius:var(--radius-lg); padding:20px; margin-bottom:24px; }
+.code-panel h3 { font-family:var(--font-serif); font-size:18px; font-weight:500; margin-bottom:4px; }
+.code-panel .panel-hint { font-size:12px; color:var(--text-tertiary); margin-bottom:12px; }
+.code-hit { background:var(--surface-sunken); border-radius:var(--radius); padding:12px; margin-bottom:8px; font-size:13px; cursor:pointer; }
+.code-hit:hover { background:var(--blue-bg); }
+.code-hit .ch-title { font-weight:600; }
+.code-hit .ch-ref { font-family:var(--font-mono,monospace); font-size:12px; color:var(--blue-fg); margin:4px 0; word-break:break-all; }
+.code-hit .ch-excerpt { color:var(--text-secondary); font-size:12px; }
+
+/* ── 文档详情操作区 ── */
+.doc-conversations { margin-top:16px; }
+.doc-conversations .conv { background:var(--surface-sunken); border-radius:var(--radius); padding:10px 12px; margin-bottom:8px; font-size:13px; }
+.doc-conversations .conv .q { font-weight:500; }
+.doc-conversations .conv .a { color:var(--text-secondary); margin-top:4px; font-size:12px; }
 
 </style>
 </head>
@@ -433,12 +528,11 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     </div>
   </header>
 
-  <!-- ── Tabs ── -->
+  <!-- ── Tabs（建图→导航两阶段心智模型：离线建图 文档库/本体/图谱，在线导航 问答，维护 分析）── -->
   <div class="tabs">
     <button class="tab active" data-tab="library">文档库</button>
-    <button class="tab" data-tab="graph">知识图谱</button>
-    <button class="tab" data-tab="metadata">元数据</button>
     <button class="tab" data-tab="ontology">本体</button>
+    <button class="tab" data-tab="graph">知识图谱</button>
     <button class="tab" data-tab="ask">问答</button>
     <button class="tab" data-tab="analytics">分析</button>
   </div>
@@ -449,6 +543,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     <button onclick="doSearch()">搜索</button>
     <label class="sb-toggle"><input type="checkbox" id="search-code"> 代码检索</label>
     <label class="sb-toggle"><input type="checkbox" id="search-grep"> 正则 grep</label>
+    <button class="sb-toggle" id="code-struct-btn" onclick="toggleCodeSearch()" style="cursor:pointer;border:none;background:none;color:var(--blue-fg);">⌘ 代码结构检索</button>
   </div>
 
   <!-- ── Library view ── -->
@@ -459,21 +554,29 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
     </div>
     <div id="compile-container" style="display:none;">
       <div class="compile-box">
-        <h3>编译文档（raw → Wiki）</h3>
+        <h3>入库文档</h3>
+        <!-- 模式切换：LLM 编译 vs 路径导入（对应设计 Step1 多格式解析） -->
+        <div class="compile-modes">
+          <button class="cmode-btn active" data-cmode="compile" onclick="switchCompileMode('compile')">LLM 编译（文本→Wiki）</button>
+          <button class="cmode-btn" data-cmode="ingest" onclick="switchCompileMode('ingest')">路径导入（多格式自动索引）</button>
+        </div>
 
+        <!-- 模式 A：LLM 编译（上传 .md/.txt 或粘贴文本，LLM 结构化为 Wiki） -->
+        <div id="cmode-compile">
+        <div class="cmode-hint">上传 .md/.txt 文件或粘贴原始资料，LLM 编译为结构化 Wiki 文档（抽取摘要/标签/实体/关系）。</div>
         <!-- 上传区 -->
         <div class="upload-zone" id="upload-zone">
           <div class="upload-buttons">
             <label class="upload-btn">
               选择文件
-              <input type="file" id="file-input" multiple accept=".md,.txt,.markdown,.pdf,.html,.htm,.json,.yaml,.yml,.py,.js,.ts" style="display:none;" onchange="handleFileSelect(event)">
+              <input type="file" id="file-input" multiple accept=".md,.txt,.markdown" style="display:none;" onchange="handleFileSelect(event)">
             </label>
             <label class="upload-btn">
               选择文件夹
-              <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none;" onchange="handleFolderSelect(event)">
+              <input type="file" id="folder-input" webkitdirectory directory multiple accept=".md,.txt,.markdown" style="display:none;" onchange="handleFolderSelect(event)">
             </label>
           </div>
-          <div class="upload-hint">支持 .md / .txt 文件，可多选或选择整个文件夹</div>
+          <div class="upload-hint">支持 .md / .txt / .markdown，可多选或选择整个文件夹</div>
         </div>
 
         <!-- 已选文件列表 -->
@@ -498,13 +601,109 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="back-btn" id="batch-compile-btn" onclick="compileBatch()" style="display:none;">批量编译</button>
           <button class="back-btn" onclick="toggleCompile()">取消</button>
         </div>
+        </div><!-- /cmode-compile -->
+
+        <!-- 模式 B：路径导入（多格式自动索引，支持 PDF/代码/HTML/配置） -->
+        <div id="cmode-ingest" style="display:none;">
+        <div class="cmode-hint">选择本地文件/文件夹上传，或输入服务端路径，自动切分 + 写 SurrealDB + 写向量库。支持 PDF / 代码 / HTML / Markdown / 配置等全格式（设计 Step1+3+4）。</div>
+        <!-- 浏览器上传区 -->
+        <div class="upload-zone" id="ingest-upload-zone">
+          <div class="upload-buttons">
+            <label class="upload-btn">
+              选择文件夹
+              <input type="file" id="ingest-folder-input" webkitdirectory directory multiple style="display:none;" onchange="handleIngestFolderSelect(event)">
+            </label>
+            <label class="upload-btn">
+              选择文件
+              <input type="file" id="ingest-file-input" multiple style="display:none;" onchange="handleIngestFileSelect(event)">
+            </label>
+          </div>
+          <div class="upload-hint">支持全格式（.pdf .py .js .html .md .yaml .json .txt …），可多选或选择整个文件夹</div>
+        </div>
+        <!-- 已选文件列表 -->
+        <div id="ingest-file-list-container" style="display:none;margin-bottom:12px;">
+          <div class="file-list-header">
+            <span>已选文件 (<span id="ingest-file-count">0</span>)</span>
+            <button class="upload-btn-small" onclick="clearIngestFileList()">清空</button>
+          </div>
+          <div id="ingest-file-list" class="file-list"></div>
+        </div>
+        <!-- 上传入库进度 -->
+        <div id="ingest-batch-progress" style="display:none;margin-bottom:12px;">
+          <div class="progress-bar"><div class="progress-fill" id="ingest-progress-fill"></div></div>
+          <div class="progress-text" id="ingest-progress-text"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+          <input type="text" id="ingest-topic" placeholder="主题（可选，如 auth）" class="analytics-input" style="flex:1;min-width:160px;">
+          <label class="sb-toggle"><input type="checkbox" id="ingest-skip" checked> 跳过已存在</label>
+          <button class="back-btn" id="ingest-upload-btn" onclick="ingestUpload()" style="display:none;">上传入库</button>
+        </div>
+        <div class="cmode-divider"><span>或输入服务端路径</span></div>
+        <div class="gq-form-row" style="margin-bottom:8px;">
+          <div class="gq-field" style="min-width:0;flex:3;">
+            <label>文件或目录路径（服务端绝对路径）</label>
+            <input type="text" id="ingest-path" placeholder="如 /abs/path/auth.py 或 /abs/path/docs/" class="analytics-input">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <label class="sb-toggle"><input type="checkbox" id="ingest-recursive" checked> 递归子目录</label>
+          <button class="back-btn" onclick="ingestByPath()">路径导入</button>
+          <button class="back-btn" onclick="toggleCompile()">取消</button>
+        </div>
+        </div><!-- /cmode-ingest -->
+
         <div id="compile-result" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    <!-- ── 代码结构化检索面板（策略5 [调用链]）── -->
+    <div id="code-search-container" style="display:none;">
+      <div class="code-panel">
+        <h3>代码结构化检索（索引 D / 调用链）</h3>
+        <div class="panel-hint">按概念绑定的文件路径定位函数 / 类 / 调用链。可指定概念名（逗号分隔）或留空由 LLM 自动定位。</div>
+        <div class="gq-form-row" style="margin-bottom:10px;">
+          <div class="gq-field" style="min-width:0;flex:3;">
+            <label>查询（函数名 / 关键词）</label>
+            <input type="text" id="cs-query" placeholder="如 login / check_perm" class="analytics-input">
+          </div>
+          <div class="gq-field" style="min-width:0;flex:2;">
+            <label>概念名（可选，逗号分隔）</label>
+            <input type="text" id="cs-concepts" placeholder="如 用户认证,403错误" class="analytics-input">
+          </div>
+          <button class="onto-btn primary" onclick="doCodeSearch()" style="height:36px;">检索</button>
+          <button class="onto-btn" onclick="toggleCodeSearch()" style="height:36px;">关闭</button>
+        </div>
+        <div id="code-search-result"></div>
       </div>
     </div>
     <div id="doc-list">
       <div class="loading">加载文档</div>
     </div>
     <div id="doc-detail" style="display:none;"></div>
+    <!-- 元数据折叠面板（主题/标签/实体/原始资料）── -->
+    <div id="metadata-panel" style="display:none;margin-top:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="font-family:var(--font-serif);font-size:18px;font-weight:500;">元数据浏览</h3>
+        <button class="onto-btn" onclick="toggleMetadata()">收起</button>
+      </div>
+      <div class="metadata-grid">
+        <div class="metadata-section">
+          <h3>主题（Topics）</h3>
+          <div id="topic-list" class="meta-list"><div class="loading">加载</div></div>
+        </div>
+        <div class="metadata-section">
+          <h3>标签（Tags）</h3>
+          <div id="tag-list" class="meta-list"><div class="loading">加载</div></div>
+        </div>
+        <div class="metadata-section">
+          <h3>实体（Entities）</h3>
+          <div id="entity-list" class="meta-list"><div class="loading">加载</div></div>
+        </div>
+        <div class="metadata-section">
+          <h3>原始资料（Raw Sources）</h3>
+          <div id="raw-list" class="meta-list"><div class="loading">加载</div></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ── Graph view ── -->
@@ -685,6 +884,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
         <span class="graph-stats" id="graph-info"></span>
       </div>
       <svg id="graph-svg"></svg>
+      <div class="graph-empty" id="graph-empty" style="display:none;"><div class="icon">🕸️</div><div>知识图谱为空</div><div class="empty-hint">图谱由文档与本体自动生成。先在 <b>文档库</b> 编译文档并 <b>build_graph</b>，或在 <b>本体</b> 定义概念与关系。</div></div>
       <div class="graph-legend" id="graph-legend"></div>
     </div>
     <div class="graph-tooltip" id="graph-tooltip"></div>
@@ -704,27 +904,6 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
   </div>
 
   <!-- ── Metadata view ── -->
-  <div class="view" id="view-metadata">
-    <div class="metadata-grid">
-      <div class="metadata-section">
-        <h3>主题（Topics）</h3>
-        <div id="topic-list" class="meta-list"><div class="loading">加载</div></div>
-      </div>
-      <div class="metadata-section">
-        <h3>标签（Tags）</h3>
-        <div id="tag-list" class="meta-list"><div class="loading">加载</div></div>
-      </div>
-      <div class="metadata-section">
-        <h3>实体（Entities）</h3>
-        <div id="entity-list" class="meta-list"><div class="loading">加载</div></div>
-      </div>
-      <div class="metadata-section">
-        <h3>原始资料（Raw Sources）</h3>
-        <div id="raw-list" class="meta-list"><div class="loading">加载</div></div>
-      </div>
-    </div>
-  </div>
-
   <!-- ── Ontology view ── -->
   <div class="view" id="view-ontology">
     <div class="onto-container">
@@ -735,15 +914,21 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <select id="onto-edge-filter" title="边类型"><option value="">全部关系</option></select>
         </div>
         <div class="onto-actions">
-          <button class="onto-btn" onclick="ontoExport()">导出 YAML</button>
-          <button class="onto-btn" onclick="ontoImport()">导入 YAML</button>
+          <button class="onto-btn primary" onclick="ontoCreateConcept()">+ 新建概念</button>
+          <span class="onto-sep"></span>
           <button class="onto-btn" onclick="ontoBuild()">LLM 构建</button>
-          <button class="onto-btn primary" onclick="loadOntology()">刷新</button>
+          <button class="onto-btn" onclick="ontoRepairBindings()">修复绑定</button>
+          <span class="onto-sep"></span>
           <button class="onto-btn" onclick="ontoPendingReview()">待审核</button>
           <button class="onto-btn" onclick="ontoSnapshot()">快照</button>
           <button class="onto-btn" onclick="ontoRollback()">回滚</button>
+          <span class="onto-sep"></span>
+          <button class="onto-btn" onclick="ontoExport()">导出</button>
+          <button class="onto-btn" onclick="ontoImport()">导入</button>
+          <button class="onto-btn" onclick="loadOntology()">刷新</button>
         </div>
       </div>
+      <div id="ontology-version-result" class="analytics-result" style="margin-top:4px;"></div>
       <div class="onto-main">
         <div class="onto-sidebar">
           <input type="text" id="onto-search" placeholder="搜索概念…" oninput="renderOntoList()">
@@ -782,11 +967,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
       <div class="analytics-card">
         <h3>本体版本管理 <span class="muted">(W4.4)</span></h3>
         <p class="muted">快照当前本体到 YAML，或从历史快照回滚。定期维护时建议先快照再改动。</p>
-        <div class="form-row">
-          <button class="onto-btn" onclick="ontoSnapshot()">创建快照</button>
-          <button class="onto-btn" onclick="ontoRollback()">从快照回滚</button>
-        </div>
-        <div id="ontology-version-result" class="analytics-result"></div>
+        <p class="muted" style="margin-top:8px;">⤵ 快照/回滚操作已统一至 <button class="onto-btn" onclick="document.querySelector('.tab[data-tab=ontology]').click()">本体视图工具栏</button>，结果就地显示。</p>
       </div>
       <div class="analytics-card">
         <h3>本体定期维护 <span class="muted">(W4.2)</span></h3>
@@ -802,6 +983,7 @@ header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); margin-bo
           <button class="onto-btn primary" onclick="runMaintenance()">立即运行维护</button>
           <button class="onto-btn" onclick="startMaintenance()">启动定时</button>
           <button class="onto-btn" onclick="stopMaintenance()">停止</button>
+          <button class="onto-btn" onclick="loadMaintenanceReport()">查看报告</button>
         </div>
         <div id="maintenance-result" class="analytics-result"></div>
         <div id="maintenance-status" class="muted" style="margin-top:6px;"></div>
@@ -823,9 +1005,8 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.tab).classList.add('active');
     // search bar only for library + graph
-    document.getElementById('search-bar').style.display = (t.dataset.tab === 'ask' || t.dataset.tab === 'metadata' || t.dataset.tab === 'ontology' || t.dataset.tab === 'analytics') ? 'none' : 'flex';
+    document.getElementById('search-bar').style.display = (t.dataset.tab === 'library' || t.dataset.tab === 'graph') ? 'flex' : 'none';
     if (t.dataset.tab === 'graph') renderGraph();
-    if (t.dataset.tab === 'metadata') loadMetadata();
     if (t.dataset.tab === 'ask') loadHotDocs();
     if (t.dataset.tab === 'ontology') loadOntology();
     if (t.dataset.tab === 'analytics') { renderAnalytics(); loadMaintenanceStatus(); }
@@ -867,12 +1048,13 @@ async function loadDocs() {
 
 function renderDocList(docs) {
   const el = document.getElementById('doc-list');
+  const compileBtn = document.getElementById('status-llm').classList.contains('ok')
+    ? `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleCompile()">+ 编译文档</button><button class="back-btn" onclick="toggleMetadata()">📊 元数据</button><button class="back-btn" onclick="toggleCodeSearch()">⌘ 代码结构检索</button></div>`
+    : `<div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;"><button class="back-btn" onclick="toggleMetadata()">📊 元数据</button><button class="back-btn" onclick="toggleCodeSearch()">⌘ 代码结构检索</button></div>`;
   if (!docs.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">📭</div>暂无文档</div>';
+    el.innerHTML = compileBtn + '<div class="empty"><div class="icon">📭</div><div>知识库尚无文档</div><div class="empty-hint">这是建图阶段（Step 1-4）的起点。点 <b>+ 编译文档</b> 上传 Markdown 让 LLM 编译为结构化 wiki，或用 <b>路径导入</b> 多格式批量索引。</div></div>';
     return;
   }
-  const compileBtn = document.getElementById('status-llm').classList.contains('ok')
-    ? `<div style="margin-bottom:16px;"><button class="back-btn" onclick="toggleCompile()">+ 编译文档</button></div>` : '';
   el.innerHTML = compileBtn + '<div class="doc-grid">' + docs.map(doc => {
     const tags = (doc.out_edges || []).filter(e => e.edge_type === 'has_tag')
       .map(e => `<span class="tag">${e.node.split(':').pop()}</span>`).join('');
@@ -924,12 +1106,17 @@ async function showDocDetail(docId) {
           <button class="back-btn" onclick="exportDoc('${doc.id}')">导出 Markdown</button>
           <button class="back-btn" onclick="showVersionChain('${doc.id}')">版本历史</button>
           <button class="back-btn" onclick="loadCodeSymbols('${doc.id}')">代码符号</button>
+          <button class="back-btn" onclick="askAboutDoc('${doc.id}','${esc(doc.title).replace(/'/g,"\\'")}')">⌥ 就此文档提问</button>
+          <button class="back-btn" onclick="syncVectors('${doc.id}')">同步向量</button>
+          <button class="back-btn" onclick="loadDocConversations('${doc.id}')">关联对话</button>
           ${document.getElementById('status-llm').classList.contains('ok')
-            ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>` : ''}
+            ? `<button class="back-btn" onclick="extractEntities('${doc.id}')">抽取实体</button>
+               <button class="back-btn" onclick="buildDocGraph('${doc.id}')">构建图边</button>` : ''}
           <button class="back-btn" style="color:var(--red-fg);border-color:var(--red-fg);" onclick="deleteDocument('${doc.id}')">删除文档</button>
         </div>
         <div id="code-symbols-container"></div>
         <div id="version-chain-container"></div>
+        <div id="doc-conversations-container"></div>
         ${relHtml}
       </div>`;
   } catch (e) {
@@ -1029,7 +1216,7 @@ async function doSearch() {
         <div class="title">${esc(r.title)} <span class="score">${r.score}</span></div>
         <div class="excerpt">${esc(r.excerpt || '')}</div>
         ${code}
-        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}${scores}</div>
+        <div class="sources">${r.sources.map(s => `<span class="source-badge ${s}">${s}</span>`).join('')}${scores}<button class="onto-mini" style="float:right;margin-left:8px" onclick="event.stopPropagation();askAboutResult('${esc((r.title||'').replace(/'/g,"\\'"))}')">⌥ 提问</button></div>
       </div>`;
     }).join('');
   } catch (e) {
@@ -1081,6 +1268,9 @@ async function renderGraph() {
     const r = await fetch(API + '/api/graph/full');
     const d = await r.json();
     graphData = {nodes: d.nodes || [], edges: d.edges || []};
+    const emptyEl = document.getElementById('graph-empty');
+    if (emptyEl) emptyEl.style.display = graphData.nodes.length ? 'none' : 'flex';
+    if (!graphData.nodes.length) { svgEl.innerHTML = ''; renderLegend(); return; }
     // 清除可搜索下拉框的旧状态，使其在 initSearchableSelects 时重新初始化
     Object.keys(ssState).forEach(k => delete ssState[k]);
     // 计算度数
@@ -1583,8 +1773,9 @@ function graphNodeClick(nodeId) {
     document.getElementById('search-input').value = name;
     doSearch();
   } else if (type === 'raw' || type === 'archive' || type === 'conversation' || type === 'version') {
-    // 这些类型无文档详情页，跳转到元数据 Tab 展示
-    document.querySelector('.tab[data-tab=metadata]').click();
+    // 这些类型无文档详情页，展开元数据面板展示
+    document.querySelector('.tab[data-tab=library]').click();
+    if (document.getElementById('metadata-panel').style.display === 'none') toggleMetadata();
   }
 }
 
@@ -1623,29 +1814,153 @@ function askThis(q) {
   document.getElementById('ask-input').value = q;
   doAsk();
 }
+
+// ── 跨视图导航（地图→导航隐喻：从概念/文档/检索结果直接发起提问）──
+// 从概念发起提问（本体地图 → 在线导航）
+function askConceptAsk(conceptName) {
+  document.querySelector('.tab[data-tab=ask]').click();
+  document.getElementById('ask-input').value = `关于「${conceptName}」，请详细说明其定义、依赖与相关概念。`;
+  document.getElementById('ask-input').focus();
+}
+// 从文档发起提问
+function askAboutDoc(docId, title) {
+  document.querySelector('.tab[data-tab=ask]').click();
+  document.getElementById('ask-input').value = `基于文档「${title}」，总结要点并解释关键概念。`;
+  document.getElementById('ask-input').focus();
+}
+// 从检索结果发起提问
+function askAboutResult(query) {
+  document.querySelector('.tab[data-tab=ask]').click();
+  document.getElementById('ask-input').value = query;
+  document.getElementById('ask-input').focus();
+}
+// 工具名 → 设计步骤标签映射（用于闭环迭代时间线）
+const TOOL_LABELS = {
+  search_documents: '检索', get_document: '读文档', list_documents: '列表',
+  graph_neighbors: '图查询', related_articles: '关联', entity_lookup: '实体',
+  topic_tree: '主题树', tag_tree: '标签树', merge_document: '合并',
+  update_metadata: '改元数据', build_graph: '建图', hot_documents: '热文档',
+  _evaluate: '评估', _rerank: '重排',
+};
+const TOOL_CLS = { _evaluate: 'eval', _rerank: 'rerank' };
+
+// 以标题/关键词发起库内检索（供证据文档 chip 点击跳转）
+function askEvidenceSearch(term) {
+  document.querySelector('.tab[data-tab=library]').click();
+  document.getElementById('search-input').value = term;
+  doSearch();
+}
+
+// 渲染完整推理链 Step5-9（对齐 AI推理引擎.md）
+function renderReasoningChain(d) {
+  if (!d) return '';
+  const cl = d.concept_location || {};
+  const op = d.ontology_path || [];
+  const byStep = {}; op.forEach(s => byStep[s.step] = s);
+  let steps = [];
+
+  // Step 5：概念定位（地图上的方向感）
+  const located = cl.located_concepts || ((byStep['概念定位'] && byStep['概念定位'].concepts) || []).map(n => ({name:n}));
+  const implicit = cl.implicit_concepts || [];
+  const constraints = cl.constraints || {};
+  const expected = cl.expected_output;
+  if (located.length || implicit.length || Object.keys(constraints).length) {
+    let body = '<div class="rc-chips">';
+    body += located.map(c => `<span class="rc-concept" onclick="askConceptAsk('${esc((c.name||'').replace(/'/g,"\\'"))}')">${esc(c.name||'')}${c.confidence!=null?`<span class="conf">${Math.round((c.confidence||0)*100)}%</span>`:''}</span>`).join('');
+    body += implicit.map(c => `<span class="rc-concept implicit" onclick="askConceptAsk('${esc((c.name||'').replace(/'/g,"\\'"))}')">${esc(c.name||'')}<span class="conf">隐含</span></span>`).join('');
+    body += '</div>';
+    if (Object.keys(constraints).length) {
+      body += `<div class="rc-constraints">约束：${Object.entries(constraints).map(([k,v])=>`<span class="ck">${esc(k)}=${esc(String(v))}</span>`).join('')}</div>`;
+    }
+    if (expected) body += `<div class="rc-meta">期望输出：${esc(expected)}</div>`;
+    steps.push(`<div class="rc-step locate"><div class="rc-label">Step 5 · 概念定位</div><div class="rc-body">${body}</div></div>`);
+  }
+
+  // Step 6：检索计划（多策略并行）
+  const plan = byStep['检索计划'];
+  if (plan && plan.strategies && plan.strategies.length) {
+    steps.push(`<div class="rc-step plan"><div class="rc-label">Step 6 · 检索计划</div><div class="rc-body"><div class="rc-chips">${plan.strategies.map(s=>`<span class="rc-strategy">${esc(s)}</span>`).join('')}</div></div></div>`);
+  }
+
+  // Step 7：检索执行
+  const exec = byStep['检索执行'];
+  if (exec) {
+    steps.push(`<div class="rc-step exec"><div class="rc-label">Step 7 · 检索执行</div><div class="rc-body"><div class="rc-meta">${exec.rounds!=null?`检索 ${exec.rounds} 轮`:''}${exec.docs_retrieved!=null?` · 命中 ${exec.docs_retrieved} 文档`:''}</div></div></div>`);
+  }
+
+  // Step 8：推理路径（沿本体关系边）+ Re-Rank 四维分
+  const path = byStep['推理路径'];
+  const rerankTrace = (d.trace || []).find(t => t.tool === '_rerank');
+  const rerankDocs = rerankTrace && rerankTrace.result && rerankTrace.result.top_docs ? rerankTrace.result.top_docs : [];
+  let s8body = '';
+  if (path && path.edges && path.edges.length) {
+    const chain = path.edges.map(e => `<span class="rp-edge ${e.is_root ? 'root' : ''}">${esc(e.relation)}</span>`).join('<span class="rp-arrow">→</span>');
+    s8body += `<div class="reasoning-path"><div class="rp-title">推理路径（沿本体关系边）</div>${chain}</div>`;
+    if (path.evidence_docs && path.evidence_docs.length) {
+      s8body += `<div class="rp-evidence">命中文据：${path.evidence_docs.map(t => `<span class="rc-evidoc" onclick="askEvidenceSearch('${esc(String(t).replace(/'/g,"\\'"))}')">${esc(t)}</span>`).join('')}</div>`;
+    }
+  }
+  if (rerankDocs.length) {
+    const DIMS = [{c:'sem',l:'语义'},{c:'con',l:'概念距离'},{c:'str',l:'结构'},{c:'fre',l:'新鲜度'}];
+    const bars = rerankDocs.map(r => {
+      const db = DIMS.map(dm => { const v = (r[dm.c+'_score']||0); const p = Math.round(v*100); return `<div class="rs-bar ${dm.c}"><div class="rs-bl"><span>${dm.l}</span><span>${p}</span></div><div class="rs-track"><div class="rs-fill" style="width:${Math.min(100,p)}%"></div></div></div>`; }).join('');
+      return `<div class="rs-doc"><div class="rs-title">${esc(r.title||r.doc_id||'')} <span class="rs-fin">综合 ${(r.final_score||0).toFixed(3)}</span></div><div class="rs-bars">${db}</div></div>`;
+    }).join('');
+    s8body += `<div class="rerank-scores"><div class="rs-head">Re-Rank 四维分（Top ${rerankDocs.length}）</div>${bars}</div>`;
+  }
+  if (s8body) {
+    steps.push(`<div class="rc-step path"><div class="rc-label">Step 8 · Re-Rank + 推理路径</div><div class="rc-body">${s8body}</div></div>`);
+  }
+
+  // Step 9：闭环迭代（按轮次分组的时间线）
+  const trace = d.trace || [];
+  if (trace.length && d.iterations > 0) {
+    const rounds = {};
+    trace.forEach(t => { const r = t.iteration||1; (rounds[r]=rounds[r]||[]).push(t); });
+    const rndKeys = Object.keys(rounds).sort((a,b)=>a-b);
+    let body = '<div class="rc-meta">迭代轮次：</div>';
+    body += rndKeys.map(r => {
+      const tools = rounds[r].map(t => `<span class="t ${TOOL_CLS[t.tool]||''}">${TOOL_LABELS[t.tool]||t.tool}</span>`).join('');
+      const lbl = r==1?'广撒网':(r==2?'精确补充':(r==3?'验证性':`第${r}轮`));
+      return `<div class="rc-iter"><span class="rnd">轮${r}·${lbl}</span><span class="tools">${tools}</span></div>`;
+    }).join('');
+    const TERM_LABELS = {answer_generated:'自然作答', evidence_sufficient:'证据充分·停止检索', no_new_info:'连续无新增信息', max_search_rounds:'达检索轮次上限', timeout:'超时止损', token_budget:'token 预算耗尽', max_iterations:'达迭代上限'};
+    if (d.termination_reason) body += `<div class="term-reason">终止原因：<b>${esc(TERM_LABELS[d.termination_reason]||d.termination_reason)}</b></div>`;
+    steps.push(`<div class="rc-step loop"><div class="rc-label">Step 9 · 闭环评估（${d.iterations} 轮）</div><div class="rc-body">${body}</div></div>`);
+  }
+
+  return steps.length ? `<div class="reasoning-chain">${steps.join('')}</div>` : '';
+}
+
 function askExtrasHtml(d) {
   if (!d) return '';
   let h = '';
   if (d.confidence != null) {
     h += `<span class="conf-badge">置信度 ${Math.round(d.confidence * 100)}%</span>`;
   }
+  if (d.path_type) {
+    const pt = d.path_type === 'fast' ? '快速通道' : '完整闭环';
+    h += `<span class="path-badge ${d.path_type}">${pt}</span>`;
+  }
   if (d.clarification_needed) {
-    const cands = (d.clarification_candidates || []).map(c => `<span class="cand">${esc(c)}</span>`).join('');
-    h += `<div class="clarify-box">⚠ 问题较宽泛，可能影响准确性。建议明确方向：${cands}</div>`;
+    const cands = (d.clarification_candidates || []).map(c => `<span class="cand" onclick="askClarify('${esc(String(c).replace(/'/g,"\\'"))}')">${esc(c)}</span>`).join('');
+    h += `<div class="clarify-box">⚠ 问题较宽泛，可能影响准确性。点击明确方向：${cands}</div>`;
   }
-  const op = d.ontology_path || [];
-  const rp = op.find(s => s.step === '推理路径');
-  if (rp && rp.edges && rp.edges.length) {
-    const chain = rp.edges.map(e => `<span class="rp-edge ${e.is_root ? 'root' : ''}">${esc(e.relation)}</span>`).join('<span class="rp-arrow">→</span>');
-    h += `<div class="reasoning-path"><div class="rp-title">推理路径（沿本体关系边）</div>${chain}</div>`;
-    if (rp.evidence_docs && rp.evidence_docs.length) {
-      h += `<div class="rp-evidence">命中文档：${rp.evidence_docs.map(t => `<span class="ev-doc">${esc(t)}</span>`).join('')}</div>`;
-    }
-  }
+  h += renderReasoningChain(d);
   if (d.uncertainties && d.uncertainties.length) {
     h += `<div class="uncertain-box"><div class="unc-title">ⓘ 回答中的不确定点</div><ul>${d.uncertainties.map(u => `<li>${esc(u)}</li>`).join('')}</ul></div>`;
   }
+  if (d.citations && d.citations.length) {
+    h += `<div class="citations"><div class="ct-title">📎 引用来源（${d.citations.length} 篇）</div>${d.citations.map(c => `<div class="ct-item"><b onclick="askAboutDoc('${esc(String(c.doc_id).replace(/'/g,"\\'"))}','${esc(String(c.title).replace(/'/g,"\\'"))}')">${esc(c.title||c.doc_id)}</b>${(c.sources||[]).map(s=>`<span class="ct-src">${esc(s)}</span>`).join('')}<span class="ct-excerpt">${esc(c.excerpt||'')}</span></div>`).join('')}</div>`;
+  }
   return h;
+}
+
+function askClarify(concept) {
+  const inp = document.getElementById('ask-input');
+  const cur = inp.value.trim().replace(/\s*\(.*\)\s*$/, '');
+  inp.value = `${cur}（关于 ${concept}）`;
+  doAsk();
 }
 
 async function doAsk() {
@@ -1697,6 +2012,183 @@ function toggleCompile() {
     document.getElementById('compile-result').innerHTML = '';
     selectedFiles = [];
     renderFileList();
+  } else {
+    // 打开时默认回到 LLM 编译模式
+    switchCompileMode('compile');
+  }
+}
+
+// 编译区模式切换（LLM 编译 vs 路径导入）
+function switchCompileMode(mode) {
+  document.querySelectorAll('.cmode-btn').forEach(b => b.classList.toggle('active', b.dataset.cmode === mode));
+  document.getElementById('cmode-compile').style.display = mode === 'compile' ? 'block' : 'none';
+  document.getElementById('cmode-ingest').style.display = mode === 'ingest' ? 'block' : 'none';
+}
+
+// 路径导入：调用 /api/pipeline/ingest-file 或 ingest-directory（多格式自动索引，设计 Step1+3+4）
+async function ingestByPath() {
+  const path = document.getElementById('ingest-path').value.trim();
+  if (!path) { alert('请输入文件或目录路径'); return; }
+  const topic = document.getElementById('ingest-topic').value.trim() || null;
+  const recursive = document.getElementById('ingest-recursive').checked;
+  const skipExisting = document.getElementById('ingest-skip').checked;
+  const el = document.getElementById('compile-result');
+  // 判断是目录还是文件
+  const isDir = path.endsWith('/') || path.endsWith('\\') || !/\.[a-zA-Z0-9]+$/.test(path.split(/[\\/]/).pop());
+  el.innerHTML = '<div class="loading">' + (isDir ? '递归导入目录中' : '导入文件中') + '</div>';
+  try {
+    let r;
+    if (isDir) {
+      r = await fetch(API + '/api/pipeline/ingest-directory', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ dir_path: path, topic, recursive, skip_existing: skipExisting, max_files: 500 })
+      });
+    } else {
+      r = await fetch(API + '/api/pipeline/ingest-file', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ file_path: path, topic, skip_existing: skipExisting })
+      });
+    }
+    const d = await r.json();
+    if (!r.ok) { el.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(d.detail || '导入失败')}</div>`; return; }
+    if (isDir) {
+      const res = d.results || [];
+      const ok = res.filter(x => x.status === 'ok').length;
+      const skip = res.filter(x => x.status === 'skipped').length;
+      const err = res.filter(x => x.status === 'error').length;
+      el.innerHTML = `<div style="color:var(--green-fg)">✓ 目录导入完成：${ok} 成功${skip?', '+skip+' 跳过':''}${err?', '+err+' 失败':''}</div>`;
+    } else {
+      if (d.status === 'ok') {
+        el.innerHTML = `<div style="color:var(--green-fg)">✓ 导入成功：${esc(d.title||'')} （${d.chunks||0} chunk / ${d.vectors||0} 向量）</div>`;
+      } else {
+        el.innerHTML = `<div style="color:var(--yellow-fg)">⊘ ${esc(d.status||'skipped')}：${esc(d.reason||'')}</div>`;
+      }
+    }
+    setTimeout(() => { toggleCompile(); loadDocs(); }, 2000);
+  } catch (e) { el.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(String(e))}</div>`; }
+}
+
+// ── 路径导入：浏览器文件/文件夹上传（多格式，复用 pipeline.ingest_file）──
+let selectedIngestFiles = [];
+
+function handleIngestFileSelect(event) {
+  const files = event.target.files;
+  if (!files || !files.length) return;
+  for (const f of files) {
+    selectedIngestFiles.push({file: f, name: f.name, size: f.size, status: 'pending'});
+  }
+  renderIngestFileList();
+  event.target.value = '';
+}
+
+function handleIngestFolderSelect(event) {
+  const files = event.target.files;
+  if (!files || !files.length) return;
+  for (const f of files) {
+    const relPath = f.webkitRelativePath || f.name;
+    selectedIngestFiles.push({file: f, name: relPath, size: f.size, status: 'pending'});
+  }
+  renderIngestFileList();
+  event.target.value = '';
+}
+
+function renderIngestFileList() {
+  const container = document.getElementById('ingest-file-list-container');
+  const listEl = document.getElementById('ingest-file-list');
+  const countEl = document.getElementById('ingest-file-count');
+  const uploadBtn = document.getElementById('ingest-upload-btn');
+  if (!selectedIngestFiles.length) {
+    container.style.display = 'none';
+    uploadBtn.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  uploadBtn.style.display = 'inline-block';
+  countEl.textContent = selectedIngestFiles.length;
+  listEl.innerHTML = selectedIngestFiles.map((f, i) => {
+    const sizeStr = f.size < 1024 ? f.size + 'B' : (f.size < 1048576 ? (f.size/1024).toFixed(1)+'KB' : (f.size/1048576).toFixed(1)+'MB');
+    const statusHtml = f.status === 'ok' ? '<span class="file-status ok">✓</span>'
+      : f.status === 'error' ? '<span class="file-status error">✗</span>'
+      : f.status === 'uploading' ? '<span class="file-status pending">⟳</span>'
+      : f.status === 'skipped' ? '<span class="file-status skipped">⊘</span>'
+      : '';
+    return `<div class="file-item" id="ingest-file-item-${i}">
+      <span class="file-name">${esc(f.name)}</span>
+      <span class="file-size">${sizeStr}</span>
+      ${statusHtml}
+      <span class="file-remove" onclick="removeIngestFile(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function removeIngestFile(index) {
+  selectedIngestFiles.splice(index, 1);
+  renderIngestFileList();
+}
+
+function clearIngestFileList() {
+  selectedIngestFiles = [];
+  renderIngestFileList();
+}
+
+// 批量上传入库：POST multipart 到 /api/pipeline/ingest-upload（多格式自动切分）
+async function ingestUpload() {
+  if (!selectedIngestFiles.length) return;
+  const topic = document.getElementById('ingest-topic').value.trim() || null;
+  const skipExisting = document.getElementById('ingest-skip').checked;
+  const progressEl = document.getElementById('ingest-batch-progress');
+  const fillEl = document.getElementById('ingest-progress-fill');
+  const textEl = document.getElementById('ingest-progress-text');
+  const uploadBtn = document.getElementById('ingest-upload-btn');
+  const resultEl = document.getElementById('compile-result');
+
+  const fd = new FormData();
+  for (const f of selectedIngestFiles) {
+    // 传 basename 作为上传文件名；后端再 os.path.basename 兑底，避免路径越权
+    const base = (f.name.split('/').pop() || f.name);
+    fd.append('files', f.file, base);
+  }
+  if (topic) fd.append('topic', topic);
+  fd.append('skip_existing', skipExisting ? 'true' : 'false');
+
+  progressEl.style.display = 'block';
+  fillEl.style.width = '10%';
+  textEl.textContent = `上传 ${selectedIngestFiles.length} 个文件中…`;
+  uploadBtn.disabled = true;
+  resultEl.innerHTML = '';
+  // 标记上传中
+  selectedIngestFiles.forEach(f => f.status = 'uploading');
+  renderIngestFileList();
+
+  try {
+    const r = await fetch(API + '/api/pipeline/ingest-upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    fillEl.style.width = '100%';
+    if (!r.ok) {
+      textEl.textContent = '上传失败';
+      resultEl.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(d.detail || '上传入库失败')}</div>`;
+      selectedIngestFiles.forEach(f => f.status = 'pending');
+      renderIngestFileList();
+      return;
+    }
+    const res = d.results || [];
+    selectedIngestFiles.forEach((f, i) => {
+      const r0 = res[i];
+      if (r0) f.status = r0.status === 'ok' ? 'ok' : (r0.status === 'skipped' ? 'skipped' : 'error');
+    });
+    renderIngestFileList();
+    const ok = d.succeeded || 0, skip = d.skipped || 0, err = d.failed || 0;
+    textEl.textContent = `完成：${ok} 成功${skip?', '+skip+' 跳过':''}${err?', '+err+' 失败':''}`;
+    resultEl.innerHTML = `<div style="color:var(--green-fg)">✓ 上传入库完成：${ok} 成功${skip?', '+skip+' 跳过':''}${err?', '+err+' 失败':''}</div>` +
+      (err ? '<div style="margin-top:6px;font-size:12px;color:var(--text-tertiary);">' + res.filter(x=>x.status==='error').map(x=>`✗ ${esc(x.file)}: ${esc(x.reason||'')}`).join('<br>') + '</div>' : '');
+    setTimeout(() => { clearIngestFileList(); toggleCompile(); loadDocs(); }, 2500);
+  } catch (e) {
+    textEl.textContent = '上传失败';
+    resultEl.innerHTML = `<div style="color:var(--red-fg)">⚠ ${esc(String(e))}</div>`;
+    selectedIngestFiles.forEach(f => f.status = 'pending');
+    renderIngestFileList();
+  } finally {
+    uploadBtn.disabled = false;
   }
 }
 
@@ -2393,6 +2885,22 @@ async function runStats() {
 }
 
 // ── Metadata view ──
+// 元数据折叠面板切换
+function toggleMetadata() {
+  document.querySelector('.tab[data-tab=library]').click();
+  const panel = document.getElementById('metadata-panel');
+  const docList = document.getElementById('doc-list');
+  const docDetail = document.getElementById('doc-detail');
+  const show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  docList.style.display = show ? 'none' : 'block';
+  docDetail.style.display = 'none';
+  document.getElementById('search-results-container').style.display = 'none';
+  document.getElementById('compile-container').style.display = 'none';
+  document.getElementById('code-search-container').style.display = 'none';
+  if (show) loadMetadata();
+}
+
 async function loadMetadata() {
   loadTopics();
   loadTagsMeta();
@@ -2470,6 +2978,8 @@ async function loadRawsMeta() {
 function searchMeta(term) {
   // Switch to library tab and search
   document.querySelector('.tab[data-tab=library]').click();
+  document.getElementById('metadata-panel').style.display = 'none';
+  document.getElementById('doc-list').style.display = 'block';
   document.getElementById('search-input').value = term;
   doSearch();
 }
@@ -2481,7 +2991,7 @@ async function loadHotDocs() {
     const r = await fetch(API + '/api/conversations/hot?limit=10');
     const d = await r.json();
     const docs = d.documents || [];
-    if (!docs.length) { el.innerHTML = ''; return; }
+    if (!docs.length) { el.innerHTML = '<div class="empty" style="padding:24px;"><div class="empty-hint">尚无提问记录。先在 <b>文档库</b> 编译文档建图，再回来提问，Agent 会沿 Step 5-9 推理链检索作答。</div></div>'; return; }
     el.innerHTML = `<div class="hot-docs"><h3>热门文档（被问得最多）</h3>
       ${docs.map(doc => `<div class="hot-doc-item" onclick="showDocDetail('${esc(doc.doc_id)}')">
         <span>${esc(doc.title)}</span>
@@ -2601,7 +3111,9 @@ function renderOntoList() {
     }).join('');
     return head + rows;
   }).join('');
-  document.getElementById('onto-concept-list').innerHTML = html || '<div class="empty">无匹配概念</div>';
+  document.getElementById('onto-concept-list').innerHTML = html || (ontoConcepts.length === 0
+    ? '<div class="empty"><div class="icon">🧭</div><div>本体尚未构建</div><div class="empty-hint">本体是导航的地图。点工具栏 <b>LLM 构建</b> 从已有文档抽取概念，或 <b>+ 新建概念</b> 手动定义。</div></div>'
+    : '<div class="empty">无匹配概念</div>');
 }
 
 function renderOntoLegend() {
@@ -2737,6 +3249,13 @@ async function selectOntoConcept(id) {
       `<button class="onto-mini" onclick="ontoSetStatus('${esc(c.id)}','approved')">通过</button>` +
       `<button class="onto-mini" onclick="ontoSetStatus('${esc(c.id)}','pending')">待定</button>` +
       `<button class="onto-mini rej" onclick="ontoSetStatus('${esc(c.id)}','rejected')">驳回</button></div>`;
+    // CRUD 操作（对齐 Step 2 本体构建：人工增删概念/关系/绑定）
+    html += `<div class="onto-status-row">
+      <button class="onto-mini" onclick="askConceptAsk('${esc(c.name).replace(/'/g,"\\'")}')">⌥ 以此概念提问</button>
+      <button class="onto-mini" onclick="ontoAddRelation('${esc(c.id)}')">+ 添加关系</button>
+      <button class="onto-mini" onclick="ontoBindDoc('${esc(c.id)}')">+ 绑定文档</button>
+      <button class="onto-mini rej" onclick="ontoDeleteConcept('${esc(c.id)}','${esc(c.name).replace(/'/g,"\\'")}')">删除概念</button>
+    </div>`;
     // 祖先链
     if (d.ancestors && d.ancestors.length) {
       html += '<h5>祖先链</h5>' + d.ancestors.map(a =>
@@ -2975,6 +3494,196 @@ async function stopMaintenance() {
     await r.json();
     el.innerHTML = '<div class="blind">已停止定时维护</div>';
   } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+// ── 本体手工 CRUD（对齐 Step 2：人工增删概念/关系/绑定）──
+function ontoModal(html) {
+  const old = document.getElementById('onto-modal'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'onto-modal'; ov.className = 'modal-overlay';
+  ov.innerHTML = `<div class="modal-box">${html}</div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+function ontoCloseModal() { const m = document.getElementById('onto-modal'); if (m) m.remove(); }
+
+function ontoCreateConcept() {
+  const opts = ontoConcepts.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  ontoModal(`
+    <h3>新建概念</h3>
+    <div class="modal-hint">对应 AI推理引擎.md Step 2：人工定义概念节点。</div>
+    <div class="modal-field"><label>名称 *</label><input type="text" id="nc-name" placeholder="如 权限校验"></div>
+    <div class="modal-field"><label>类型</label><select id="nc-type"><option>concept</option><option>entity</option><option>module</option><option>process</option><option>failure_mode</option></select></div>
+    <div class="modal-field"><label>描述</label><textarea id="nc-desc" rows="3" placeholder="一句话说明概念含义"></textarea></div>
+    <div class="modal-field"><label>父概念（is-a，可选）</label><select id="nc-parent"><option value="">无</option>${opts}</select></div>
+    <div class="modal-actions"><button class="onto-btn" onclick="ontoCloseModal()">取消</button><button class="onto-btn primary" onclick="ontoCreateConceptSubmit()">创建</button></div>`);
+}
+async function ontoCreateConceptSubmit() {
+  const name = document.getElementById('nc-name').value.trim();
+  if (!name) { alert('请填写名称'); return; }
+  const body = { name, concept_type: document.getElementById('nc-type').value, description: document.getElementById('nc-desc').value.trim(), parent_id: document.getElementById('nc-parent').value || null };
+  try {
+    const r = await fetch(API + '/api/ontology/concepts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    ontoCloseModal(); loadOntology();
+    alert(`已创建概念：${d.name || name}`);
+  } catch (e) { alert('创建失败: ' + e.message); }
+}
+
+function ontoAddRelation(sourceId) {
+  const opts = ontoConcepts.filter(c => c.id !== sourceId).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  const relTypes = ['related','depends','triggers','contains','contrasts','is_a','implements','extends','references'];
+  const ropts = relTypes.map(t => `<option value="${t}">${t}</option>`).join('');
+  ontoModal(`
+    <h3>添加关系</h3>
+    <div class="modal-hint">建立概念间关系边（depends/triggers/contains/contrasts/is-a…）。</div>
+    <div class="modal-field"><label>目标概念 *</label><select id="ar-target">${opts}</select></div>
+    <div class="modal-field"><label>关系类型</label><select id="ar-type">${ropts}</select></div>
+    <div class="modal-actions"><button class="onto-btn" onclick="ontoCloseModal()">取消</button><button class="onto-btn primary" onclick="ontoAddRelationSubmit('${esc(sourceId)}')">建立</button></div>`);
+}
+async function ontoAddRelationSubmit(sourceId) {
+  const target = document.getElementById('ar-target').value;
+  const rtype = document.getElementById('ar-type').value;
+  try {
+    const r = await fetch(API + '/api/ontology/relations', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ source_id: sourceId, target_id: target, relation_type: rtype }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    ontoCloseModal(); selectOntoConcept(sourceId); loadOntology();
+  } catch (e) { alert('建立关系失败: ' + e.message); }
+}
+
+function ontoBindDoc(conceptId) {
+  ontoModal(`
+    <h3>绑定文档</h3>
+    <div class="modal-hint">将概念绑定到文档（primary/secondary/inferred），可附带文件路径/函数名以激活代码结构化检索（策略5）。</div>
+    <div class="modal-field"><label>文档 ID *</label><input type="text" id="bd-docid" placeholder="如 ml_basics"></div>
+    <div class="modal-field"><label>绑定类型</label><select id="bd-type"><option>primary</option><option>secondary</option><option>inferred</option></select></div>
+    <div class="modal-field"><label>文件路径（可选，激活代码检索）</label><input type="text" id="bd-path" placeholder="如 /abs/path/auth.py"></div>
+    <div class="modal-field"><label>函数名（可选）</label><input type="text" id="bd-fn" placeholder="如 check_perm"></div>
+    <div class="modal-actions"><button class="onto-btn" onclick="ontoCloseModal()">取消</button><button class="onto-btn primary" onclick="ontoBindDocSubmit('${esc(conceptId)}')">绑定</button></div>`);
+}
+async function ontoBindDocSubmit(conceptId) {
+  const document_id = document.getElementById('bd-docid').value.trim();
+  if (!document_id) { alert('请填写文档 ID'); return; }
+  const body = { concept_id: conceptId, document_id, binding_type: document.getElementById('bd-type').value, file_path: document.getElementById('bd-path').value.trim(), function_name: document.getElementById('bd-fn').value.trim() };
+  try {
+    const r = await fetch(API + '/api/ontology/bindings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    ontoCloseModal(); selectOntoConcept(conceptId); loadOntology();
+  } catch (e) { alert('绑定失败: ' + e.message); }
+}
+
+async function ontoDeleteConcept(conceptId, name) {
+  if (!confirm(`确定删除概念「${name}」及其所有关系边与绑定？不可恢复。`)) return;
+  try {
+    const r = await fetch(API + `/api/ontology/concepts/${encodeURIComponent(conceptId)}`, { method:'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    document.getElementById('onto-detail').innerHTML = '<div class="empty">点击概念节点查看详情</div>';
+    loadOntology();
+  } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+async function ontoRepairBindings() {
+  if (!confirm('重新标注现有文档的概念绑定（LLM 多选 + 关键词兜底）？\n用于补全 concept_ids，使 Re-Rank 概念距离因子生效。')) return;
+  const statsEl = document.getElementById('onto-stats');
+  statsEl.innerHTML = '<span class="onto-chip">修复绑定中…</span>';
+  try {
+    const r = await fetch(API + '/api/repair-bindings?limit=200', { method:'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    alert(`扫描 ${d.scanned||0} 篇，更新 ${d.updated||0} 篇，错误 ${d.errors?.length||0}`);
+    loadOntology();
+  } catch (e) { statsEl.innerHTML = '<span class="onto-chip">修复失败</span>'; alert('修复绑定失败: ' + e.message); }
+}
+
+// ── 代码结构化检索（策略5 [调用链]）──
+function toggleCodeSearch() {
+  document.querySelector('.tab[data-tab=library]').click();
+  const c = document.getElementById('code-search-container');
+  const show = c.style.display === 'none';
+  c.style.display = show ? 'block' : 'none';
+  document.getElementById('doc-list').style.display = show ? 'none' : 'block';
+  document.getElementById('search-results-container').style.display = 'none';
+  document.getElementById('doc-detail').style.display = 'none';
+  document.getElementById('compile-container').style.display = 'none';
+}
+async function doCodeSearch() {
+  const q = document.getElementById('cs-query').value.trim();
+  if (!q) { alert('请输入查询'); return; }
+  const concepts = document.getElementById('cs-concepts').value.trim();
+  const el = document.getElementById('code-search-result');
+  el.innerHTML = '<div class="loading">代码结构化检索中</div>';
+  const url = API + `/api/code-search?q=${encodeURIComponent(q)}&topk=10` + (concepts ? `&concept_names=${encodeURIComponent(concepts)}` : '');
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="blind">⚠ ${esc(d.error)}</div>`; return; }
+    const notes = (d.notes || []).map(n => `<div class="muted" style="font-size:11px">${esc(n)}</div>`).join('');
+    const res = d.results || [];
+    if (!res.length) { el.innerHTML = notes + '<div class="blind">未命中代码符号（可能概念未绑定 file_path）</div>'; return; }
+    el.innerHTML = notes + res.map(r => {
+      const ref = (r.file_path || r.function_name) ? `<div class="ch-ref">📄 ${esc(r.file_path||'')}${r.function_name ? ' · ƒ ' + esc(r.function_name) : ''}</div>` : '';
+      return `<div class="code-hit" onclick="showDocDetail('${esc(r.doc_id)}')">
+        <div class="ch-title">${esc(r.title)} <span class="score">${r.final_score ?? r.original_score ?? ''}</span></div>
+        ${ref}
+        <div class="ch-excerpt">${esc(r.excerpt || '')}</div>
+        <div class="sources">${(r.sources||[]).map(s=>`<span class="source-badge ${s}">${s}</span>`).join('')}</div>
+      </div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+// ── 维护报告查看 ──
+async function loadMaintenanceReport() {
+  const el = document.getElementById('maintenance-result');
+  el.innerHTML = '<div class="loading">读取报告</div>';
+  try {
+    const r = await fetch(API + '/api/maintenance/report');
+    const d = await r.json();
+    if (d.note) { el.innerHTML = `<div class="blind">${esc(d.note)}</div>`; return; }
+    const newList = (d.proposed_new || []).map(n => `<span class="onto-chip">${esc(n)}</span>`).join(' ');
+    const blind = (d.blind_spots || []).map(b => `<div class="blind"><span class="q">${esc(b.question)}</span><span class="c">×${b.count}</span></div>`).join('');
+    el.innerHTML = `<div class="blind">扫描 ${d.scanned||0} 篇，提议 ${d.proposed_new_count||0} 概念，跳过重复 ${d.skipped_existing||0}。</div>` +
+      (newList ? `<div style="margin:6px 0">${newList}</div>` : '') +
+      (d.snapshot_path ? `<div class="muted">快照：<code>${esc(d.snapshot_path)}</code></div>` : '') +
+      (blind ? `<div style="margin-top:6px">查询盲区：</div>${blind}` : '');
+  } catch (e) { el.innerHTML = `<div class="blind">⚠ ${esc(String(e))}</div>`; }
+}
+
+// ── 文档详情操作 ──
+async function syncVectors(docId) {
+  if (!confirm('重新切分并向量库同步该文档？')) return;
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/sync-vectors`, { method:'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    alert(`已同步：新增 ${d.chunks_added||0} 个向量分块，清理旧 ${d.old_removed||0}`);
+  } catch (e) { alert('同步失败: ' + e.message); }
+}
+async function buildDocGraph(docId) {
+  if (!confirm('使用 LLM 对该文档抽取实体/关系并建图边？')) return;
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/build-graph`, { method:'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    alert(`图边构建完成：${d.entities_added||0} 实体，${d.relations_added||0} 关系`);
+    showDocDetail(docId);
+  } catch (e) { alert('构建失败: ' + e.message); }
+}
+async function loadDocConversations(docId) {
+  const el = document.getElementById('doc-conversations-container');
+  el.innerHTML = '<div class="loading">加载关联对话</div>';
+  try {
+    const r = await fetch(API + `/api/documents/${encodeURIComponent(docId)}/conversations`);
+    const d = await r.json();
+    const convs = d.conversations || [];
+    if (!convs.length) { el.innerHTML = '<div class="muted" style="font-size:12px">暂无关联对话</div>'; return; }
+    el.innerHTML = '<div class="doc-conversations"><h4 style="font-size:13px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">关联对话 (' + convs.length + ')</h4>' +
+      convs.map(c => `<div class="conv"><div class="q">${esc(c.question||'')}</div><div class="a">${esc(c.answer||'')}</div></div>`).join('') + '</div>';
+  } catch (e) { el.innerHTML = ''; }
 }
 
 // ── Init ──

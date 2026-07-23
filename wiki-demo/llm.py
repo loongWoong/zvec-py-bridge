@@ -1066,6 +1066,7 @@ def run_agent(question: str, max_iterations: int = 8,
     search_rounds = 0
     last_new_docs = 0
     force_answer = False
+    termination_reason: str = "max_iterations"  # 默认：达到最大迭代
 
     # P2-1: 硬性约束
     TIME_LIMIT = 45     # 总时间上限 (秒)
@@ -1090,6 +1091,7 @@ def run_agent(question: str, max_iterations: int = 8,
             })
             # 让 LLM 最后一轮直接回答
             max_iterations = i + 2
+            termination_reason = "timeout"
 
         # P2-1: token 预算检查
         if _total_tokens(messages) > TOKEN_LIMIT:
@@ -1098,6 +1100,7 @@ def run_agent(question: str, max_iterations: int = 8,
                 "content": "[系统] 已达 token 预算上限。请基于已有信息直接给出最佳回答。",
             })
             max_iterations = i + 2
+            termination_reason = "token_budget"
         url, body, headers = _build_llm_request(_to_provider_messages(messages), TOOL_DEFS)
         r = requests.post(url, json=body, headers=headers, timeout=config.LLM_TIMEOUT)
 
@@ -1119,6 +1122,7 @@ def run_agent(question: str, max_iterations: int = 8,
                         "role": "user",
                         "content": "[系统] 已达到最大检索轮次(3轮)。请基于已有信息直接给出最佳回答，明确标注不确定的部分。",
                     })
+                    termination_reason = "max_search_rounds"
                     continue
 
                 # P2-1: 每轮检索范围收窄提示
@@ -1186,6 +1190,7 @@ def run_agent(question: str, max_iterations: int = 8,
                     "role": "user",
                     "content": "[系统] 最近两轮检索均无新增信息。请直接基于已有证据给出回答。",
                 })
+                termination_reason = "no_new_info"
             # P2-1: 每轮检索后告知 Agent 已检索的文档，防止重复查询
             if is_search_call and prev_retrieved_ids:
                 retrieved_titles = [d.get("title", d.get("doc_id", ""))
@@ -1215,6 +1220,7 @@ def run_agent(question: str, max_iterations: int = 8,
                     decision = eval_result.get("decision", "")
                     if decision == "answer":
                         force_answer = True
+                        termination_reason = "evidence_sufficient"
                         messages.append({
                             "role": "user",
                             "content": "[系统·评估] 现有证据已足够回答，请直接生成最终回答，并附推理路径与引用来源。",
@@ -1240,6 +1246,8 @@ def run_agent(question: str, max_iterations: int = 8,
             last_new_docs = new_docs_this_round
         else:
             answer = _clean_answer(content)
+            if termination_reason == "max_iterations":
+                termination_reason = "answer_generated"
 
             # ── Re-Rank 后处理 ──
             if use_rerank and reranker and all_retrieved_docs:
@@ -1250,7 +1258,20 @@ def run_agent(question: str, max_iterations: int = 8,
                         "iteration": i + 1,
                         "tool": "_rerank",
                         "args": {"candidates": len(all_retrieved_docs)},
-                        "result": {"top_docs": [(r["title"], r.get("final_score", r.get("score", 0))) for r in reranked[:5]]},
+                        "result": {"top_docs": [
+                            {
+                                "title": r.get("title", ""),
+                                "doc_id": r.get("doc_id", ""),
+                                "final_score": r.get("final_score", r.get("score", 0)),
+                                "semantic_score": r.get("semantic_score", 0),
+                                "concept_score": r.get("concept_score", 0),
+                                "structural_score": r.get("structural_score", 0),
+                                "freshness_score": r.get("freshness_score", 0),
+                                "concept_ids": r.get("concept_ids", []),
+                                "sources": r.get("sources", []),
+                            }
+                            for r in reranked[:5]
+                        ]},
                         "duration": 0,
                     })
                 except Exception:
@@ -1316,6 +1337,23 @@ def run_agent(question: str, max_iterations: int = 8,
             except Exception:
                 pass
 
+            # Step 10: 结构化引用（从检索到的文档构建，带来源路 + 概念归属）
+            citations: list[dict] = []
+            _seen_cite: set[str] = set()
+            for _d in all_retrieved_docs:
+                _did = _d.get("doc_id", "")
+                if not _did or _did in _seen_cite:
+                    continue
+                _seen_cite.add(_did)
+                citations.append({
+                    "doc_id": _did,
+                    "title": _d.get("title", ""),
+                    "sources": _d.get("sources", []),
+                    "excerpt": (_d.get("excerpt", "") or "")[:160],
+                    "score": _d.get("score", 0),
+                })
+            citations = citations[:8]
+
             return {
                 "answer": answer,
                 "trace": trace,
@@ -1328,6 +1366,8 @@ def run_agent(question: str, max_iterations: int = 8,
                 "uncertainties": uncertainties,
                 "clarification_needed": clarification_needed,
                 "clarification_candidates": clarification_candidates,
+                "citations": citations,
+                "termination_reason": termination_reason,
             }
 
     return {
@@ -1342,4 +1382,6 @@ def run_agent(question: str, max_iterations: int = 8,
         "uncertainties": [],
         "clarification_needed": clarification_needed,
         "clarification_candidates": clarification_candidates,
+        "citations": [],
+        "termination_reason": termination_reason,
     }

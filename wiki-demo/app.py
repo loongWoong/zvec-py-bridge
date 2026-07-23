@@ -867,6 +867,68 @@ def api_ingest_directory(req: IngestDirectoryRequest):
     )
 
 
+@app.post("/api/pipeline/ingest-upload")
+async def api_ingest_upload(
+    files: list[UploadFile] = File(...),
+    topic: str | None = Form(default=None),
+    author: str | None = Form(default=None),
+    skip_existing: bool = Form(default=True),
+):
+    """浏览器上传文件批量入库（多格式自动切分 + 写 SurrealDB + 写向量库）。
+
+    复用 pipeline.ingest_file 的多格式解析（PDF / 代码 / HTML / Markdown / 配置等，
+    设计 Step1+3+4）。上传文件写入临时目录并保留原文件名，使按扩展名分派的解析器
+    与标题推断（path.stem）与服务端路径导入行为完全一致。
+    """
+    import tempfile, shutil
+    tmpdir = tempfile.mkdtemp(prefix="ingest_upload_")
+    results: list[dict] = []
+    try:
+        for f in files:
+            filename = f.filename or "unknown"
+            # 仅取 basename，避免 webkitdirectory 相对路径越权写入临时目录之外
+            safe_name = os.path.basename(filename.replace("\\", "/"))
+            if not safe_name:
+                results.append({"file": filename, "status": "error", "reason": "无效文件名"})
+                continue
+            tmp_path = os.path.join(tmpdir, safe_name)
+            # 同名文件追加序号避免覆盖
+            if os.path.exists(tmp_path):
+                base, ext = os.path.splitext(safe_name)
+                i = 1
+                while os.path.exists(os.path.join(tmpdir, f"{base}__{i}{ext}")):
+                    i += 1
+                tmp_path = os.path.join(tmpdir, f"{base}__{i}{ext}")
+            try:
+                content = await f.read()
+                with open(tmp_path, "wb") as out:
+                    out.write(content)
+                r = pipeline.ingest_file(
+                    tmp_path, topic=topic, author=author,
+                    skip_existing=skip_existing,
+                )
+                # 显示原始上传名而非临时文件名
+                r["file"] = filename
+                results.append(r)
+            except Exception as e:
+                results.append({"file": filename, "status": "error", "reason": str(e)})
+            finally:
+                await f.close()
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    succeeded = sum(1 for r in results if r.get("status") == "ok")
+    skipped = sum(1 for r in results if r.get("status") == "skipped")
+    failed = sum(1 for r in results if r.get("status") == "error")
+    return {
+        "total": len(results),
+        "succeeded": succeeded,
+        "skipped": skipped,
+        "failed": failed,
+        "results": results,
+    }
+
+
 @app.post("/api/documents/{doc_id}/sync-vectors")
 def api_sync_vectors(doc_id: str):
     """为已有文档重建向量索引（删除旧向量 + 重新切分 + 入库）。"""

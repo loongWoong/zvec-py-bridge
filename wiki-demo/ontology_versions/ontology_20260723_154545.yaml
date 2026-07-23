@@ -1,0 +1,670 @@
+concepts:
+- name: ANN
+  type: algorithm
+  description: 近似最近邻搜索，在海量向量中快速找近似解
+  key: ann
+  parent: HNSW
+  relations:
+  - target: HNSW
+    type: contains
+    direction: in
+  bindings:
+  - document: HNSW
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: test_doc2
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Agent
+  type: pattern
+  description: LLM 驱动自主智能体，工具调用+多步推理
+  key: agent
+  relations:
+  - target: RAG Pipeline
+    type: contrasts
+    direction: out
+  - target: Prompt
+    type: related
+    direction: in
+  bindings:
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 本体建模与OA智能体交付总结
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Attention
+  type: mechanism
+  description: 注意力机制，允许模型动态关注输入序列不同部分
+  key: attention
+  relations:
+  - target: Multi-Head Attention
+    type: contains
+    direction: out
+  bindings:
+  - document: Attention
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Attention
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: secondary
+    file_path: ''
+    function_name: ''
+- name: Chain-of-Thought
+  type: pattern
+  description: 思维链提示，要求逐步推理
+  key: chain_of_thought
+  parent: Prompt
+  relations:
+  - target: Few-shot
+    type: contrasts
+    direction: out
+  bindings:
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Cosine Similarity
+  type: metric
+  description: 余弦相似度，测量向量夹角
+  key: cosine_similarity
+  relations:
+  - target: Euclidean Distance
+    type: contrasts
+    direction: in
+  - target: Inner Product
+    type: related
+    direction: in
+  bindings:
+  - document: Embedding
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Embedding
+    type: secondary
+    file_path: ''
+    function_name: ''
+- name: Decoder
+  type: component
+  description: Transformer 解码器，自回归生成输出序列
+  key: decoder
+  relations:
+  - target: Self-Attention
+    type: depends
+    direction: out
+  bindings:
+  - document: Transformer
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Embedding
+  type: concept
+  description: 文本嵌入，将文本映射为稠密向量
+  key: embedding
+  relations:
+  - target: RAG Pipeline
+    type: depends
+    direction: in
+  - target: Vector Database
+    type: depends
+    direction: in
+  bindings:
+  - document: Embedding
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Embedding
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: 本体建模与OA智能体交付总结
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Encoder
+  type: component
+  description: Transformer 编码器，将输入编码为连续表示
+  key: encoder
+  relations:
+  - target: Self-Attention
+    type: depends
+    direction: out
+  - target: Self-Attention
+    type: depends
+    direction: out
+  bindings:
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: BERT
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: BERT
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: primary
+    file_path: ''
+    function_name: ''
+- name: Euclidean Distance
+  type: metric
+  description: 欧氏距离，测量向量直线距离
+  key: euclidean_distance
+  relations:
+  - target: Cosine Similarity
+    type: contrasts
+    direction: out
+- name: Few-shot
+  type: pattern
+  description: 少样本提示，用少量示例引导格式
+  key: few_shot
+  parent: Prompt
+  relations:
+  - target: Chain-of-Thought
+    type: contrasts
+    direction: in
+  bindings:
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Fine-tuning
+  type: process
+  description: 在预训练模型上用领域数据继续训练
+  key: fine_tuning
+  bindings:
+  - document: BERT
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: BERT
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: Fine-tuning
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Fine-tuning
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Full Fine-tuning
+  type: process
+  description: 全量微调，更新所有参数
+  key: full_fine_tuning
+  parent: Fine-tuning
+  relations:
+  - target: LoRA
+    type: contrasts
+    direction: in
+  bindings:
+  - document: Fine-tuning
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: HNSW
+  type: mechanism
+  description: 分层可导航小世界图索引，多层图加速 ANN
+  key: hnsw
+  relations:
+  - target: ANN
+    type: contains
+    direction: out
+  - target: IVF
+    type: contrasts
+    direction: in
+  - target: Vector Database
+    type: depends
+    direction: in
+  bindings:
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: test_doc2
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: HNSW
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: HNSW
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: 向量数据库
+    type: secondary
+    file_path: ''
+    function_name: ''
+- name: Hallucination
+  type: problem
+  description: 幻觉问题，LLM 生成不存在的信息
+  key: hallucination
+  relations:
+  - target: RAG Pipeline
+    type: triggers
+    direction: out
+  bindings:
+  - document: RAG
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: IVF
+  type: mechanism
+  description: 倒排文件索引，先聚类再在簇内搜索
+  key: ivf
+  relations:
+  - target: HNSW
+    type: contrasts
+    direction: out
+  bindings:
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Inner Product
+  type: metric
+  description: 向量内积，归一化后等价于余弦相似度
+  key: inner_product
+  relations:
+  - target: Cosine Similarity
+    type: related
+    direction: out
+  bindings:
+  - document: Embedding
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Layer Normalization
+  type: mechanism
+  description: 层归一化，标准化每层的激活值
+  key: layer_normalization
+  bindings:
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: secondary
+    file_path: ''
+    function_name: ''
+- name: LoRA
+  type: process
+  description: 低秩适配微调，只训练低秩矩阵
+  key: lora
+  parent: Fine-tuning
+  relations:
+  - target: Full Fine-tuning
+    type: contrasts
+    direction: out
+  bindings:
+  - document: Fine-tuning
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: M
+  type: configuration
+  description: HNSW 图度数参数，影响精度和内存
+  key: m
+  parent: HNSW
+  bindings:
+  - document: 欢迎
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: test_doc2
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: application-prod
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: test_doc1
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: OrderService_Architecture
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 近期提交分析报告
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: HNSW
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Embedding
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Masked Language Modeling
+  type: mechanism
+  description: 掩码语言建模，随机遮蔽输入标记让模型预测
+  key: masked_language_modeling
+  bindings:
+  - document: BERT
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: BERT
+    type: primary
+    file_path: ''
+    function_name: ''
+- name: Multi-Head Attention
+  type: mechanism
+  description: 多头注意力，并行计算多个注意力头后拼接
+  key: multi_head_attention
+  parent: Self-Attention
+  relations:
+  - target: Attention
+    type: contains
+    direction: in
+  bindings:
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Attention
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Positional Encoding
+  type: mechanism
+  description: 位置编码，向输入嵌入注入序列位置信息
+  key: positional_encoding
+  bindings:
+  - document: Transformer
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Prompt
+  type: concept
+  description: 提示词，引导 LLM 输出的输入文本
+  key: prompt
+  relations:
+  - target: Agent
+    type: related
+    direction: out
+  bindings:
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Prompt
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: QLoRA
+  type: process
+  description: 量化 LoRA，进一步降低显存需求
+  key: qlora
+  parent: LoRA
+  bindings:
+  - document: Fine-tuning
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: RAG Pipeline
+  type: process
+  description: 检索增强生成管道：检索→拼上下文→LLM 生成
+  key: rag_pipeline
+  relations:
+  - target: Embedding
+    type: depends
+    direction: out
+  - target: Vector Database
+    type: depends
+    direction: out
+  - target: Hallucination
+    type: triggers
+    direction: in
+  - target: Agent
+    type: contrasts
+    direction: in
+  bindings:
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 本体建模与OA智能体交付总结
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Fine-tuning
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: AI推理引擎
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: ReAct
+  type: pattern
+  description: Reason+Act 循环，Agent 的核心控制模式
+  key: react
+  parent: Agent
+  relations:
+  - target: Tool Calling
+    type: depends
+    direction: in
+  bindings:
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Residual Connection
+  type: mechanism
+  description: 残差连接，跳跃连接防止梯度消失
+  key: residual_connection
+  bindings:
+  - document: Transformer
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Self-Attention
+  type: mechanism
+  description: 自注意力机制，Q/K/V 来自同一输入的注意力变体
+  key: self_attention
+  parent: Attention
+  relations:
+  - target: Encoder
+    type: depends
+    direction: in
+  - target: Decoder
+    type: depends
+    direction: in
+  - target: Encoder
+    type: depends
+    direction: in
+  bindings:
+  - document: Transformer
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: Transformer
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: Attention
+    type: secondary
+    file_path: ''
+    function_name: ''
+- name: SurrealDB
+  type: infrastructure
+  description: 多模型数据库，同时支持文档、图、全文检索
+  key: surrealdb
+- name: System Prompt
+  type: concept
+  description: 系统提示词，定义模型角色和行为约束
+  key: system_prompt
+  parent: Prompt
+  bindings:
+  - document: Prompt
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Tool Calling
+  type: mechanism
+  description: LLM 工具调用机制
+  key: tool_calling
+  parent: Agent
+  relations:
+  - target: ReAct
+    type: depends
+    direction: out
+  bindings:
+  - document: 公路养护智能 Agent 系统 - 原始需求
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: Vector Database
+  type: infrastructure
+  description: 向量数据库，存储和检索高维向量的专用数据库
+  key: vector_database
+  relations:
+  - target: HNSW
+    type: depends
+    direction: out
+  - target: Embedding
+    type: depends
+    direction: out
+  - target: RAG Pipeline
+    type: depends
+    direction: in
+  bindings:
+  - document: test_doc2
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 本体建模与OA智能体交付总结
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: RAG
+    type: secondary
+    file_path: ''
+    function_name: ''
+  - document: 向量数据库
+    type: primary
+    file_path: ''
+    function_name: ''
+  - document: AI推理引擎
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: ef_construction
+  type: configuration
+  description: HNSW 建图搜索宽度参数，影响索引质量
+  key: ef_construction
+  parent: HNSW
+  bindings:
+  - document: HNSW
+    type: inferred
+    file_path: ''
+    function_name: ''
+- name: zvec
+  type: tool
+  description: zvec 向量数据库引擎，支持 HNSW/IVF/FLAT
+  key: zvec
+  parent: Vector Database
+  bindings:
+  - document: 向量数据库
+    type: inferred
+    file_path: ''
+    function_name: ''
+  - document: 向量数据库
+    type: secondary
+    file_path: ''
+    function_name: ''

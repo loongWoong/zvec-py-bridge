@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semantic Wiki · 核心能力 Pipeline 全流程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+  :root{
+    --canvas:#FBFBFA; --surface:#FFFFFF; --surface-alt:#F7F6F3; --surface-sunken:#F2F1ED;
+    --border:#EAEAEA; --border-strong:#E2E0DC;
+    --text:#111111; --text-secondary:#787774; --text-tertiary:#A8A6A1;
+    --red-bg:#FDEBEC; --red-fg:#9F2F2D;
+    --blue-bg:#E1F3FE; --blue-fg:#1F6C9F;
+    --green-bg:#EDF3EC; --green-fg:#346538;
+    --yellow-bg:#FBF3DB; --yellow-fg:#956400;
+    --purple-bg:#F0EAFB; --purple-fg:#6B3FA0;
+    --font-sans:'Geist','SF Pro Display','Helvetica Neue','PingFang SC','Microsoft YaHei',sans-serif;
+    --font-serif:'Newsreader','Songti SC','Noto Serif SC',Georgia,serif;
+    --font-mono:'Geist Mono','SF Mono','JetBrains Mono','Consolas',monospace;
+    --radius:8px; --radius-lg:12px; --ease:cubic-bezier(0.16,1,0.3,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-family:var(--font-sans);background:var(--canvas);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.6}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 28px 80px}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:14px}
+  h1{font-family:var(--font-serif);font-size:clamp(28px,4.6vw,42px);line-height:1.14;font-weight:500;letter-spacing:-.01em;margin-bottom:16px}
+  h1 em{font-style:italic;color:var(--text-secondary)}
+  .lede{font-size:16px;color:var(--text-secondary);max-width:700px;margin-bottom:10px}
+  .lede b{color:var(--text);font-weight:600}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-family:var(--font-mono)}
+  .legend .lg{display:flex;align-items:center;gap:6px}
+  .legend .dot{width:9px;height:9px;border-radius:50%}
+  .legend .new{color:var(--green-fg);font-weight:600}
+
+  section{margin-top:56px}
+  h2{font-family:var(--font-serif);font-size:24px;font-weight:500;letter-spacing:-.01em;margin-bottom:4px}
+  .sec-sub{font-size:13px;color:var(--text-tertiary);margin-bottom:22px;font-family:var(--font-mono)}
+
+  /* ── SVG schematic ── */
+  .schematic{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 16px 12px}
+  .schematic svg{display:block;width:100%;height:auto}
+  .band-label{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+
+  /* ── Step cards ── */
+  .phase-block{margin-top:18px}
+  .phase-bar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .phase-pill{font-family:var(--font-mono);font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;letter-spacing:.04em}
+  .phase-bar .pb-title{font-family:var(--font-serif);font-size:17px;font-weight:500}
+  .phase-bar .pb-sub{font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+  .card-top{display:flex;align-items:center;gap:10px;padding:14px 16px 12px}
+  .sn{flex-shrink:0;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:600;font-size:13px;color:#fff}
+  .card-name{font-size:14px;font-weight:600;line-height:1.3}
+  .card-body{padding:0 16px 14px;flex:1;display:flex;flex-direction:column;gap:9px}
+  .field{display:flex;gap:8px;font-size:12px;align-items:flex-start}
+  .field .fk{flex-shrink:0;width:54px;color:var(--text-tertiary);font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding-top:1px}
+  .field .fv{color:var(--text-secondary);flex:1;min-width:0;word-break:break-word}
+  .field .fv code{font-family:var(--font-mono);font-size:11px;background:var(--surface-sunken);padding:1px 5px;border-radius:4px;color:var(--text)}
+  .surface{background:var(--surface-sunken);border-radius:6px;padding:7px 9px;font-size:12px;color:var(--text-secondary);line-height:1.5}
+  .surface .new-tag{display:inline-block;background:var(--green-bg);color:var(--green-fg);border:1px solid var(--green-fg);border-radius:3px;padding:0 5px;font-size:10px;font-family:var(--font-mono);margin-right:4px;font-weight:600}
+  .surface .gap-tag{display:inline-block;background:#F2F2F0;color:var(--text-tertiary);border:1px dashed var(--border-strong);border-radius:3px;padding:0 5px;font-size:10px;font-family:var(--font-mono);margin-right:4px}
+
+  /* phase tints */
+  .offline .sn{background:var(--green-fg)} .offline{border-top:3px solid var(--green-fg)}
+  .online .sn{background:var(--blue-fg)} .online{border-top:3px solid var(--blue-fg)}
+  .online .sn.s5{background:var(--purple-fg)} .online .sn.s6{background:var(--blue-fg)}
+  .online .sn.s7{background:var(--green-fg)} .online .sn.s8{background:var(--yellow-fg)}
+  .online .sn.s9{background:var(--red-fg)} .online .sn.s10{background:var(--text-secondary)}
+  .maint .sn{background:var(--yellow-fg)} .maint{border-top:3px solid var(--yellow-fg)}
+
+  .loop-note{margin:18px 0 0;padding:14px 16px;background:var(--red-bg);border:1px solid #f0d3d4;border-radius:var(--radius);font-size:13px;color:var(--red-fg);line-height:1.6}
+  .loop-note b{font-weight:600}
+  .loop-note .mono{font-family:var(--font-mono);font-size:12px}
+
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  @media(max-width:640px){.wrap{padding:32px 16px 56px}.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Pipeline · 核心能力串联全流程</div>
+  <h1>十个步骤，<em>一条 pipeline 串起所有核心能力</em></h1>
+  <p class="lede">离线 4 步把资料变成结构化知识，在线 6 步沿推理链把问题变成带引用的答案，维护回路让知识库自演进。每一步都对应一个<b>核心模块</b>、一个<b>API 端点</b>、一个<b>前端观测面</b>——三者对齐，pipeline 才不是黑盒。</p>
+  <div class="legend">
+    <div class="lg"><span class="dot" style="background:#346538"></span>离线建图</div>
+    <div class="lg"><span class="dot" style="background:#1F6C9F"></span>在线推理</div>
+    <div class="lg"><span class="dot" style="background:#956400"></span>维护反馈</div>
+    <div class="lg"><span class="new">● 本次新增观测面</span></div>
+  </div>
+
+  <!-- ── Schematic ── -->
+  <section>
+    <h2>Pipeline 串联示意</h2>
+    <div class="sec-sub">offline → online → maintenance → ↺ 闭环</div>
+    <div class="schematic">
+      <svg viewBox="0 0 920 400" role="img" aria-label="pipeline 串联示意图">
+        <defs>
+          <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#A8A6A1"/></marker>
+          <marker id="arR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#9F2F2D"/></marker>
+          <marker id="arY" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#956400"/></marker>
+        </defs>
+
+        <!-- band labels -->
+        <text x="20" y="58" class="band-label" fill="#346538">离线 · STEP 1–4</text>
+        <text x="20" y="198" class="band-label" fill="#1F6C9F">在线 · STEP 5–10</text>
+        <text x="20" y="338" class="band-label" fill="#956400">维护 · W4.2</text>
+
+        <!-- OFFLINE band: 4 nodes -->
+        <g>
+          <circle cx="120" cy="70" r="20" fill="#346538"/><text x="120" y="76" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">1</text>
+          <circle cx="250" cy="70" r="20" fill="#346538"/><text x="250" y="76" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">2</text>
+          <circle cx="380" cy="70" r="20" fill="#346538"/><text x="380" y="76" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">3</text>
+          <circle cx="510" cy="70" r="20" fill="#346538"/><text x="510" y="76" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">4</text>
+          <line x1="140" y1="70" x2="228" y2="70" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="270" y1="70" x2="358" y2="70" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="400" y1="70" x2="488" y2="70" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="120" y="108" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">解析</text>
+          <text x="250" y="108" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">本体构建</text>
+          <text x="380" y="108" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">切分</text>
+          <text x="510" y="108" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">多索引</text>
+        </g>
+
+        <!-- handoff offline→online -->
+        <path d="M510,90 C510,150 120,150 120,180" fill="none" stroke="#A8A6A1" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+        <text x="320" y="146" text-anchor="middle" font-size="10" fill="#A8A6A1" font-family="var(--font-mono)">建库完成 → 进入推理</text>
+
+        <!-- ONLINE band: 6 nodes -->
+        <g>
+          <circle cx="120" cy="210" r="20" fill="#6B3FA0"/><text x="120" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">5</text>
+          <circle cx="235" cy="210" r="20" fill="#1F6C9F"/><text x="235" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">6</text>
+          <circle cx="350" cy="210" r="20" fill="#346538"/><text x="350" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">7</text>
+          <circle cx="465" cy="210" r="20" fill="#956400"/><text x="465" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">8</text>
+          <circle cx="580" cy="210" r="20" fill="#9F2F2D"/><text x="580" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">9</text>
+          <circle cx="700" cy="210" r="20" fill="#787774"/><text x="700" y="216" text-anchor="middle" font-family="var(--font-mono)" font-size="13" font-weight="600" fill="#fff">10</text>
+          <line x1="140" y1="210" x2="213" y2="210" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="255" y1="210" x2="328" y2="210" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="370" y1="210" x2="443" y2="210" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="485" y1="210" x2="558" y2="210" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="600" y1="210" x2="678" y2="210" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="120" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">概念定位</text>
+          <text x="235" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">检索计划</text>
+          <text x="350" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">并行检索</text>
+          <text x="465" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">Re-Rank</text>
+          <text x="580" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">闭环评估</text>
+          <text x="700" y="248" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">合成输出</text>
+        </g>
+
+        <!-- Step9 inner loopback → Step7 -->
+        <path d="M580,190 C580,160 350,160 350,190" fill="none" stroke="#9F2F2D" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arR)"/>
+        <text x="465" y="158" text-anchor="middle" font-size="10" fill="#9F2F2D" font-family="var(--font-mono)">不够/矛盾 → 补检索 ↺</text>
+
+        <!-- feedback online→maintenance -->
+        <path d="M700,230 C700,290 120,290 120,320" fill="none" stroke="#956400" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arY)"/>
+        <text x="410" y="284" text-anchor="middle" font-size="10" fill="#956400" font-family="var(--font-mono)">查询日志 + 文件变化 → 维护</text>
+
+        <!-- MAINTENANCE band: 4 nodes -->
+        <g>
+          <circle cx="120" cy="350" r="18" fill="#956400"/><text x="120" y="355" text-anchor="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="#fff">M1</text>
+          <circle cx="250" cy="350" r="18" fill="#956400"/><text x="250" y="355" text-anchor="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="#fff">M2</text>
+          <circle cx="380" cy="350" r="18" fill="#956400"/><text x="380" y="355" text-anchor="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="#fff">M3</text>
+          <circle cx="510" cy="350" r="18" fill="#956400"/><text x="510" y="355" text-anchor="middle" font-family="var(--font-mono)" font-size="12" font-weight="600" fill="#fff">M4</text>
+          <line x1="138" y1="350" x2="230" y2="350" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="268" y1="350" x2="360" y2="350" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="398" y1="350" x2="490" y2="350" stroke="#A8A6A1" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text x="120" y="384" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">增量索引</text>
+          <text x="250" y="384" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">修复绑定</text>
+          <text x="380" y="384" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">向量同步</text>
+          <text x="510" y="384" text-anchor="middle" font-size="10" fill="#787774" font-family="var(--font-sans)">定时巡检</text>
+        </g>
+
+        <!-- outer loopback maintenance→offline -->
+        <path d="M510,332 C560,332 560,70 530,70" fill="none" stroke="#956400" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arY)"/>
+        <text x="640" y="200" text-anchor="middle" font-size="10" fill="#956400" font-family="var(--font-mono)">↺ 校准后</text>
+        <text x="640" y="214" text-anchor="middle" font-size="10" fill="#956400" font-family="var(--font-mono)">回到建库</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ── Offline cards ── -->
+  <section>
+    <div class="phase-block">
+      <div class="phase-bar"><span class="phase-pill" style="background:var(--green-bg);color:var(--green-fg)">离线 · STEP 1–4</span><span class="pb-title">把资料变成可检索的结构</span><span class="pb-sub">pipeline.py · chunker.py · wiki_runtime.py</span></div>
+      <div class="cards">
+        <div class="card offline">
+          <div class="card-top"><div class="sn">1</div><div class="card-name">文档解析与结构化提取</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>pipeline.py</code> 多格式分发</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/pipeline/ingest-upload</code><br><code>ingest-file / ingest-directory</code></span></div>
+            <div class="surface"><span class="new-tag">新增</span>文档库「+编译文档」→ 浏览器选文件夹/多文件上传</div>
+          </div>
+        </div>
+        <div class="card offline">
+          <div class="card-top"><div class="sn">2</div><div class="card-name">本体构建 / 概念抽取</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>ontology_builder.py</code><br>propose_concepts/relations/bindings</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ontology/build</code><br><code>/api/ontology/review</code></span></div>
+            <div class="surface">本体 Tab「LLM 构建」+ 待审核状态机（approved/proposed）+ 版本快照/回滚</div>
+          </div>
+        </div>
+        <div class="card offline">
+          <div class="card-top"><div class="sn">3</div><div class="card-name">概念感知切分</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>chunker.py</code> 按类型边界切</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv">ingest 内部，无独立端点</span></div>
+            <div class="surface"><span class="gap-tag">待补</span>chunk 抽屉下钻视图（所属概念/行号/概念类型）尚未建</div>
+          </div>
+        </div>
+        <div class="card offline">
+          <div class="card-top"><div class="sn">4</div><div class="card-name">多索引构建</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>wiki_runtime.py</code> 四路融合<br><code>code_analyzer.py</code> 结构化</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>sync-vectors / build-graph</code></span></div>
+            <div class="surface">四路融合搜索 + 代码结构检索面板（函数/调用链）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Online cards ── -->
+  <section>
+    <div class="phase-block">
+      <div class="phase-bar"><span class="phase-pill" style="background:var(--blue-bg);color:var(--blue-fg)">在线 · STEP 5–10</span><span class="pb-title">沿推理链得到带引用的答案</span><span class="pb-sub">concept_locator · ontology_traversal · reranker · llm</span></div>
+      <div class="cards">
+        <div class="card online">
+          <div class="card-top"><div class="sn s5">5</div><div class="card-name">意图理解 + 概念定位</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>concept_locator.py</code> locate</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code>（内嵌）</span></div>
+            <div class="surface">推理链面板「定位概念 + 置信度 + 隐含概念」<br><span class="new-tag">新增</span>低置信反问候选<b>可点击重问</b>（风险2 落地）</div>
+          </div>
+        </div>
+        <div class="card online">
+          <div class="card-top"><div class="sn s6">6</div><div class="card-name">本体展开 → 检索计划</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>ontology_traversal.py</code><br>expand_concepts / generate_search_plan</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code>（内嵌）</span></div>
+            <div class="surface">推理链面板「Step6 检索策略 chips」（向量/全文/图/调用链/元数据）</div>
+          </div>
+        </div>
+        <div class="card online">
+          <div class="card-top"><div class="sn s7">7</div><div class="card-name">并行检索执行</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>wiki_runtime.py</code> search_documents 四路融合</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code> + <code>GET /api/search</code></span></div>
+            <div class="surface">推理链面板「命中数 + 检索轮次」</div>
+          </div>
+        </div>
+        <div class="card online">
+          <div class="card-top"><div class="sn s8">8</div><div class="card-name">Re-Rank + 概念距离过滤</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>reranker.py</code> 四维打分 + 过滤</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code>（内嵌）</span></div>
+            <div class="surface"><span class="new-tag">新增</span>推理链面板「Step8 <b>四维分条</b>（语义/概念距离/结构/新鲜度）」+ 推理路径边 + 证据文档可点击</div>
+          </div>
+        </div>
+        <div class="card online">
+          <div class="card-top"><div class="sn s9">9</div><div class="card-name">LLM 评估 → 闭环判断</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>llm.py</code> evaluate_retrieval</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code>（内嵌）</span></div>
+            <div class="surface">推理链面板「轮次时间线（广撒网/精确补充/验证性）」<br><span class="new-tag">新增</span><b>终止原因</b>（证据充分/无新增/超时止损/达上限）</div>
+          </div>
+        </div>
+        <div class="card online">
+          <div class="card-top"><div class="sn s10">10</div><div class="card-name">最终合成 + 输出</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>llm.py</code> run_agent</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/ask</code></span></div>
+            <div class="surface">答案 + 置信度 + 不确定点<br><span class="new-tag">新增</span><b>快速/完整闭环徽章</b>（path_type）+ <b>结构化引用列表</b>（文档+来源路+摘要，可点击跳转）</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="loop-note">
+      <b>内闭环（Step 9）：</b>评估证据 → 不够/矛盾 → 生成补充/验证检索 → <span class="mono">回 Step 7</span> → 再评估 → 直到满足或达上限。<br>
+      <b>外闭环（维护）：：</b>查询日志 + 文件变化 → 增量索引/修复绑定/向量同步 → <span class="mono">↺ 回 Step 1</span>，知识库持续校准。
+    </div>
+  </section>
+
+  <!-- ── Maintenance cards ── -->
+  <section>
+    <div class="phase-block">
+      <div class="phase-bar"><span class="phase-pill" style="background:var(--yellow-bg);color:var(--yellow-fg)">维护 · W4.2</span><span class="pb-title">让知识库随使用自演进</span><span class="pb-sub">maintenance_scheduler · pipeline</span></div>
+      <div class="cards">
+        <div class="card maint">
+          <div class="card-top"><div class="sn">M1</div><div class="card-name">增量索引</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>pipeline.py</code> reindex-changed</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/pipeline/reindex-changed</code></span></div>
+            <div class="surface">分析页 W4.1：检测文件变化，只重切分改动项</div>
+          </div>
+        </div>
+        <div class="card maint">
+          <div class="card-top"><div class="sn">M2</div><div class="card-name">修复绑定</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>pipeline.py</code> repair_concept_bindings</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>POST /api/repair-bindings</code></span></div>
+            <div class="surface">本体页「修复绑定」+ 绑定计数（0/2）</div>
+          </div>
+        </div>
+        <div class="card maint">
+          <div class="card-top"><div class="sn">M3</div><div class="card-name">向量同步 + 版本</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>wiki_runtime.py</code> + 本体 YAML</span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>sync-vectors / snapshot / rollback</code></span></div>
+            <div class="surface">文档详情「同步向量」+ 本体「快照/回滚」版本化</div>
+          </div>
+        </div>
+        <div class="card maint">
+          <div class="card-top"><div class="sn">M4</div><div class="card-name">定时巡检</div></div>
+          <div class="card-body">
+            <div class="field"><span class="fk">模块</span><span class="fv"><code>maintenance_scheduler.py</code></span></div>
+            <div class="field"><span class="fk">端点</span><span class="fv"><code>GET /api/maintenance/report</code> 等 6 端点</span></div>
+            <div class="surface">分析页 W4.2：周期巡检状态与报告</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Semantic Wiki Runtime · 核心能力 Pipeline 全流程</span>
+    <span>Step 1–10 · 模块↔端点↔前端观测面 三层对齐</span>
+  </footer>
+
+</div>
+</body>
+</html>
