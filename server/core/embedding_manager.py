@@ -46,7 +46,11 @@ class EmbeddingManager:
             # build once to validate config + surface missing dependencies early
             build_embedding_function(dto)
             self._configs[dto.name] = dto
-            self._instances.clear()
+            # drop only this function's cached instances — previously the whole
+            # cache (incl. already-loaded heavy models) was cleared on every
+            # registration, forcing needless reloads.
+            for key in [k for k in self._instances if k[0] == dto.name]:
+                self._instances.pop(key, None)
             return embedding_to_dict(dto.name, dto)
 
     def remove(self, name: str) -> dict[str, Any]:
@@ -77,21 +81,34 @@ class EmbeddingManager:
         is_sparse = (config.type or "").lower() in _SPARSE_TYPES
         # dense types ignore encoding_type entirely
         key = (name, encoding_type) if (is_sparse and encoding_type) else (name, None)
-        if key in self._instances:
-            return self._instances[key]
+        # Fast path: already cached (checked under the lock).
+        with self._lock:
+            cached = self._instances.get(key)
+            if cached is not None:
+                return cached
+        # Build outside the global lock so loading a heavy model (torch /
+        # sentence-transformers / …) does not block embeds on *other* functions.
+        # Another thread may build the same key while we load; we double-check
+        # and keep whichever instance landed first.
         cfg = config
         if is_sparse and encoding_type:
             # rebuild with the requested encoding_type (query vs document)
             cfg = config.model_copy(update={"encoding_type": encoding_type})
-        inst = build_embedding_function(cfg)
-        self._instances[key] = inst
-        return inst
+        built = build_embedding_function(cfg)
+        with self._lock:
+            existing = self._instances.get(key)
+            if existing is not None:
+                return existing
+            self._instances[key] = built
+            return built
 
     def embed(self, name: str, texts: list[str], encoding_type: str | None = None) -> list[Any]:
         if not texts:
             return []
-        with self._lock:
-            inst = self._instance_for(name, encoding_type)
+        # _instance_for manages its own locking and may load a model outside the
+        # lock; we must not hold the global lock across the (potentially slow)
+        # build or the embedding loop.
+        inst = self._instance_for(name, encoding_type)
         results: list[Any] = []
         for text in texts:
             if not isinstance(text, str) or not text.strip():

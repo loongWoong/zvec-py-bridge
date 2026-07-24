@@ -73,5 +73,14 @@ class Settings:
     host: str = field(default_factory=lambda: os.environ.get("ZVEC_HOST", "0.0.0.0"))
     port: int = field(default_factory=lambda: _env_int("ZVEC_PORT", 8666))
 
+    # CORS: comma-separated list of allowed origins. "*" (the default) allows
+    # every origin; set ZVEC_CORS_ORIGINS to a concrete list to lock it down
+    # before exposing the service beyond a trusted network.
+    cors_origins: list[str] = field(
+        default_factory=lambda: [
+            o.strip() for o in os.environ.get("ZVEC_CORS_ORIGINS", "*").split(",") if o.strip()
+        ]
+    )
+
 
 settings = Settings()

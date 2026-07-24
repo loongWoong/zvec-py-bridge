@@ -5,7 +5,7 @@ from typing import Any
 
 from core.errors import InvalidArgumentError, ZvecRuntimeError
 from core.manager import ZvecManager, manager
-from model.dto import SearchDTO
+from model.dto import RerankerDTO, SearchDTO
 from model.mapper import build_query, build_reranker, doc_to_dict
 from service.embedding_service import EmbeddingService
 
@@ -31,20 +31,25 @@ class QueryService:
             for q in dto.queries:
                 if q.text and q.vector is None and q.id is None:
                     self.embedding.resolve_query_vector(q, dto.embedding)
+        # Multiple queries must be fused by a reranker; default to RRF when the
+        # caller did not specify one (matches the documented behaviour).
+        if dto.reranker is None and len(dto.queries) > 1:
+            dto.reranker = RerankerDTO(type="rrf")
         collection = self._mgr.get(name)
         queries = [build_query(q) for q in dto.queries]
         reranker = build_reranker(dto.reranker)
-        try:
-            results = collection.query(
-                queries=queries,
-                topk=dto.topk,
-                filter=dto.filter,
-                include_vector=dto.include_vector,
-                output_fields=dto.output_fields,
-                reranker=reranker,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"query failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                results = collection.query(
+                    queries=queries,
+                    topk=dto.topk,
+                    filter=dto.filter,
+                    include_vector=dto.include_vector,
+                    output_fields=dto.output_fields,
+                    reranker=reranker,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"query failed: {exc}") from exc
         return {
             "name": name,
             "topk": dto.topk,

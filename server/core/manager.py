@@ -32,7 +32,30 @@ class ZvecManager:
         self.auto_open = auto_open
         self._collections: dict[str, zvec.Collection] = {}
         self._lock = threading.RLock()
+        # Per-collection operation lock. The registry lock above only guards the
+        # in-memory registry; the actual engine calls (insert/query/optimize/…)
+        # run outside it, so we serialise them per collection to avoid racing a
+        # close/destroy that is flushing or finalising a handle another request
+        # is still using.
+        self._op_locks: dict[str, threading.RLock] = {}
+        self._op_locks_guard = threading.Lock()
         os.makedirs(self.base_path, exist_ok=True)
+
+    # ------------------------------------------------------------------ #
+    # per-collection operation lock
+    # ------------------------------------------------------------------ #
+    def lock_for(self, name: str) -> threading.RLock:
+        """Return (creating if needed) the operation lock for a collection."""
+        with self._op_locks_guard:
+            lock = self._op_locks.get(name)
+            if lock is None:
+                lock = threading.RLock()
+                self._op_locks[name] = lock
+            return lock
+
+    def _drop_op_lock(self, name: str) -> None:
+        with self._op_locks_guard:
+            self._op_locks.pop(name, None)
 
     # ------------------------------------------------------------------ #
     # path helpers
@@ -95,19 +118,25 @@ class ZvecManager:
             if name not in self._collections:
                 raise NotFoundError(f"collection {name!r} is not open")
             collection = self._collections.pop(name)
-            # flush before dropping the handle so pending writes are durable
+        # Wait for any in-flight operation on this collection to finish (the op
+        # lock is held by callers around their engine calls), then flush so
+        # pending writes are durable before we let the handle go.
+        with self.lock_for(name):
             try:
                 collection.flush()
             except Exception:  # noqa: BLE001 - best effort
                 pass
             # The C++ object is ref-counted by pybind; letting it go out of
             # scope here releases the open handle.
+        self._drop_op_lock(name)
 
     def destroy(self, name: str) -> None:
         """Permanently delete a collection and its on-disk data."""
         with self._lock:
             collection = self._collections.pop(name, None)
             path = self._path(name)
+        # Serialise against any in-flight operation on this collection.
+        with self.lock_for(name):
             if collection is not None:
                 try:
                     collection.destroy()
@@ -121,6 +150,7 @@ class ZvecManager:
                 if not os.path.exists(path):
                     raise NotFoundError(f"no collection found at {path!r}")
                 shutil.rmtree(path, ignore_errors=True)
+        self._drop_op_lock(name)
 
     # ------------------------------------------------------------------ #
     # access

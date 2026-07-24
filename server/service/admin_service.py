@@ -14,19 +14,23 @@ class AdminService:
 
     def stats(self, name: str) -> dict[str, Any]:
         collection = self._mgr.get(name)
+        with self._mgr.lock_for(name):
+            stats = stats_to_dict(collection.stats)
+            schema = schema_to_dict(collection.schema)
         return {
             "name": name,
             "path": collection.path,
-            "stats": stats_to_dict(collection.stats),
-            "schema": schema_to_dict(collection.schema),
+            "stats": stats,
+            "schema": schema,
         }
 
     def flush(self, name: str) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            collection.flush()
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"flush failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.flush()
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"flush failed: {exc}") from exc
         return {"name": name, "status": "flushed"}
 
     def engine_info(self) -> dict[str, Any]:

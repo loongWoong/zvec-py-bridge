@@ -2,7 +2,7 @@
 
 Run with::
 
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn main:app --host 0.0.0.0 --port 8666 --reload
 
 The zvec engine is initialised exactly once during startup (zvec.init raises
 if called twice), and the shared :class:`core.manager.ZvecManager` is used by
@@ -60,9 +60,13 @@ async def lifespan(_app: FastAPI):
         init_kwargs["jieba_dict_dir"] = settings.jieba_dict_dir
     try:
         zvec.init(**init_kwargs)
-    except RuntimeError:
-        # already initialised (e.g. under --reload); safe to continue
-        pass
+    except Exception as exc:  # noqa: BLE001
+        # zvec.init raises if called more than once. Under uvicorn --reload a
+        # previous worker may have already initialised the engine in this
+        # process; that specific case is benign. Anything else is a real
+        # startup failure and must propagate.
+        if "already" not in str(exc).lower():
+            raise
     yield
 
 
@@ -89,7 +93,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

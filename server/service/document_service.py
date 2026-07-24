@@ -30,10 +30,12 @@ class DocumentService:
         collection = self._mgr.get(name)
         docs = [build_doc(d) for d in dto.documents]
         method = getattr(collection, op)
-        try:
-            result = method(docs)
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"{op} failed: {exc}") from exc
+        # Serialise engine mutations per collection (see ZvecManager.lock_for).
+        with self._mgr.lock_for(name):
+            try:
+                result = method(docs)
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"{op} failed: {exc}") from exc
         statuses = result if isinstance(result, list) else [result]
         return {
             "name": name,
@@ -59,10 +61,11 @@ class DocumentService:
 
     def delete(self, name: str, ids: list[str]) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            result = collection.delete(ids)
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"delete failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                result = collection.delete(ids)
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"delete failed: {exc}") from exc
         statuses = result if isinstance(result, list) else [result]
         return {
             "name": name,
@@ -76,26 +79,31 @@ class DocumentService:
 
     def delete_by_filter(self, name: str, dto: DeleteByFilterDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            collection.delete_by_filter(dto.filter)
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"delete_by_filter failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.delete_by_filter(dto.filter)
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"delete_by_filter failed: {exc}") from exc
         return {"name": name, "op": "delete_by_filter", "filter": dto.filter, "status": "ok"}
 
     def fetch(self, name: str, dto: FetchDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            docs = collection.fetch(
-                dto.ids,
-                output_fields=dto.output_fields,
-                include_vector=dto.include_vector,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"fetch failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                docs = collection.fetch(
+                    dto.ids,
+                    output_fields=dto.output_fields,
+                    include_vector=dto.include_vector,
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"fetch failed: {exc}") from exc
+        # zvec's fetch returns either a mapping (id -> Doc) or a list of Docs
+        # depending on the engine version; normalise both into a list.
+        doc_list = list(docs.values()) if hasattr(docs, "values") else list(docs)
         return {
             "name": name,
-            "count": len(docs),
+            "count": len(doc_list),
             "documents": [
-                doc_to_dict(d, include_vector=dto.include_vector) for d in docs.values()
+                doc_to_dict(d, include_vector=dto.include_vector) for d in doc_list
             ],
         }

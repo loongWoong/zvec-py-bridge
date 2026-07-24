@@ -34,6 +34,14 @@ def delete_documents(name: str, dto: DeleteIdsDTO):
     return document_service.delete(name, dto.ids)
 
 
+@router.post("/{name}/documents:deleteByIds", summary="Delete documents by id (POST variant)")
+def delete_documents_by_ids(name: str, dto: DeleteIdsDTO):
+    # POST variant of the DELETE route above. Some HTTP clients / reverse
+    # proxies strip request bodies from DELETE, so callers that need maximum
+    # interoperability should prefer this endpoint.
+    return document_service.delete(name, dto.ids)
+
+
 @router.post("/{name}/documents:deleteByFilter", summary="Delete documents by filter")
 def delete_by_filter(name: str, dto: DeleteByFilterDTO):
     return document_service.delete_by_filter(name, dto)

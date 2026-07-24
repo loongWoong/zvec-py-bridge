@@ -16,16 +16,17 @@ class IndexService:
     def create_index(self, name: str, field_name: str, dto: CreateIndexDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
         index_param = build_index_param(dto.index_param)
-        try:
-            import zvec
+        with self._mgr.lock_for(name):
+            try:
+                import zvec
 
-            collection.create_index(
-                field_name=field_name,
-                index_param=index_param,
-                option=zvec.IndexOption(concurrency=dto.concurrency),
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"create_index failed: {exc}") from exc
+                collection.create_index(
+                    field_name=field_name,
+                    index_param=index_param,
+                    option=zvec.IndexOption(concurrency=dto.concurrency),
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"create_index failed: {exc}") from exc
         return {
             "name": name,
             "field": field_name,
@@ -35,18 +36,20 @@ class IndexService:
 
     def drop_index(self, name: str, field_name: str) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            collection.drop_index(field_name)
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"drop_index failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.drop_index(field_name)
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"drop_index failed: {exc}") from exc
         return {"name": name, "field": field_name, "status": "dropped"}
 
     def optimize(self, name: str, dto: OptimizeDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            import zvec
+        with self._mgr.lock_for(name):
+            try:
+                import zvec
 
-            collection.optimize(option=zvec.OptimizeOption(concurrency=dto.concurrency))
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"optimize failed: {exc}") from exc
+                collection.optimize(option=zvec.OptimizeOption(concurrency=dto.concurrency))
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"optimize failed: {exc}") from exc
         return {"name": name, "status": "optimized"}

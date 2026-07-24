@@ -224,9 +224,10 @@ def build_doc(dto: DocumentDTO) -> zvec.Doc:
     vectors = None
     if dto.vectors:
         vectors = {name: _normalise_vector(v) for name, v in dto.vectors.items()}
+    # `score` is an *output* concept (assigned by the engine on search), so it
+    # is intentionally not forwarded on insert/upsert/update.
     return zvec.Doc(
         id=dto.id,
-        score=dto.score,
         vectors=vectors or None,
         fields=dto.fields or None,
     )
@@ -240,7 +241,12 @@ def _normalise_vector(v: Any) -> Any:
     requires ``uint32`` keys, so we cast them here.
     """
     if isinstance(v, dict):
-        return {int(k): float(val) for k, val in v.items()}
+        try:
+            return {int(k): float(val) for k, val in v.items()}
+        except (ValueError, TypeError) as exc:
+            raise InvalidArgumentError(
+                f"sparse vector keys must be integers: {exc}"
+            ) from exc
     return v
 
 

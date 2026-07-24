@@ -68,12 +68,22 @@ class CollectionService:
 
     def info(self, name: str) -> dict[str, Any]:
         collection = self._mgr.get(name)
+        # Option attributes differ across zvec versions; never let a missing
+        # attribute turn a benign GET into a 500.
+        try:
+            read_only = collection.option.read_only
+        except Exception:  # noqa: BLE001
+            read_only = None
+        try:
+            enable_mmap = collection.option.enable_mmap
+        except Exception:  # noqa: BLE001
+            enable_mmap = None
         return {
             "name": name,
             "opened": True,
             "path": collection.path,
-            "read_only": collection.option.read_only,
-            "enable_mmap": collection.option.enable_mmap,
+            "read_only": read_only,
+            "enable_mmap": enable_mmap,
             "schema": schema_to_dict(collection.schema),
         }
 
@@ -83,28 +93,30 @@ class CollectionService:
     def add_column(self, name: str, dto: AddColumnDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
         field = build_field_schema(dto.field)
-        try:
-            collection.add_column(
-                field_schema=field,
-                expression=dto.expression,
-                option=_add_column_option(dto.concurrency),
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"add_column failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.add_column(
+                    field_schema=field,
+                    expression=dto.expression,
+                    option=_add_column_option(dto.concurrency),
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"add_column failed: {exc}") from exc
         return {"name": name, "column": dto.field.name, "status": "added"}
 
     def alter_column(self, name: str, old_name: str, dto: AlterColumnDTO) -> dict[str, Any]:
         collection = self._mgr.get(name)
         field = build_field_schema(dto.field) if dto.field else None
-        try:
-            collection.alter_column(
-                old_name=old_name,
-                new_name=dto.new_name,
-                field_schema=field,
-                option=_alter_column_option(dto.concurrency),
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"alter_column failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.alter_column(
+                    old_name=old_name,
+                    new_name=dto.new_name,
+                    field_schema=field,
+                    option=_alter_column_option(dto.concurrency),
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"alter_column failed: {exc}") from exc
         return {
             "name": name,
             "old_name": old_name,
@@ -114,10 +126,11 @@ class CollectionService:
 
     def drop_column(self, name: str, field_name: str) -> dict[str, Any]:
         collection = self._mgr.get(name)
-        try:
-            collection.drop_column(field_name)
-        except Exception as exc:  # noqa: BLE001
-            raise ZvecRuntimeError(f"drop_column failed: {exc}") from exc
+        with self._mgr.lock_for(name):
+            try:
+                collection.drop_column(field_name)
+            except Exception as exc:  # noqa: BLE001
+                raise ZvecRuntimeError(f"drop_column failed: {exc}") from exc
         return {"name": name, "column": field_name, "status": "dropped"}
 
 

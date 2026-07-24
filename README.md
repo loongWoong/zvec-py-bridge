@@ -60,13 +60,13 @@ free of zvec-specific branching.
 ```bash
 cd server
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port 8666
 ```
 
 Health check:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8666/health
 # {"status":"UP","zvec_version":"0.5.1"}
 ```
 
@@ -85,7 +85,8 @@ Configuration is entirely environment-variable driven:
 | `ZVEC_BRUTE_FORCE_BY_KEYS_RATIO` | 0.1 | brute-force key-lookup threshold |
 | `ZVEC_FTS_BRUTE_FORCE_BY_KEYS_RATIO` | 0.05 | FTS brute-force threshold |
 | `ZVEC_JIEBA_DICT_DIR` | bundled | jieba Chinese FTS tokenizer dict |
-| `ZVEC_HOST` / `ZVEC_PORT` | `0.0.0.0` / `8000` | bind address |
+| `ZVEC_CORS_ORIGINS` | `*` | comma-separated allowed CORS origins; set to a concrete list to lock down before exposing beyond a trusted network |
+| `ZVEC_HOST` / `ZVEC_PORT` | `0.0.0.0` / `8666` | bind address |
 
 ---
 
@@ -147,6 +148,7 @@ POST /collections
 | `PUT` | `/.../documents` | upsert |
 | `PATCH` | `/.../documents` | update (partial) |
 | `DELETE` | `/.../documents` | delete by id (body: `{"ids":[...]}`) |
+| `POST` | `/.../documents:deleteByIds` | delete by id — POST variant (prefer this when clients/proxies strip DELETE bodies) |
 | `POST` | `/.../documents:deleteByFilter` | delete by filter expression |
 | `POST` | `/.../documents:fetch` | fetch by id |
 
